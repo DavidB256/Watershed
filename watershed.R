@@ -210,7 +210,7 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
   		lbfgs_output <- lbfgs(compute_logistic_regression_likelihood, compute_logistic_regression_gradient, gradient_variable_vec, y=observed_training_outliers, feat=observed_training_feat, lambda=best_lambda, invisible=1)
 
   		if (lbfgs_output$convergence != 0 & lbfgs_output$convergence != 2) {
-    		print("ERRROR!")
+    		print("ERROR:")
     		print(lbfgs_output$convergence)
     	}
     	# Add optimal GAM parameters to data structure
@@ -221,7 +221,7 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
 }
 
 
-# Compute MAP estimates of the coefficients defined by P(outlier_status| FR)
+# Compute MAP estimates of the coefficients defined by P(outlier_status | FR)
 map_phi_initialization <- function(discrete_outliers, posterior, number_of_dimensions, pseudoc) {
 	num_bins = 3
 	# Initialize output matrices
@@ -229,8 +229,10 @@ map_phi_initialization <- function(discrete_outliers, posterior, number_of_dimen
 	phi_inlier <- matrix(1, number_of_dimensions, num_bins)
 	# Count number of times we fall into each bin
 	for (bin_number in 1:num_bins) {
-		phi_outlier[,bin_number] <- colSums(((discrete_outliers==bin_number)*posterior),na.rm=TRUE)
-		phi_inlier[,bin_number] <- colSums(((discrete_outliers==bin_number)*(1-posterior)),na.rm=TRUE)
+		phi_outlier[,bin_number] <- colSums(((discrete_outliers==bin_number)*posterior),
+							  				na.rm=TRUE)
+		phi_inlier[,bin_number] <- colSums(((discrete_outliers==bin_number)*(1-posterior)),
+										   na.rm=TRUE)
 	}
 	# Add prior
 	for (dimension_number in 1:number_of_dimensions) {
@@ -250,23 +252,23 @@ map_phi_initialization <- function(discrete_outliers, posterior, number_of_dimen
 # Put model parameters in an easy to handle data structure
 initialize_model_params <- function(num_samples, num_genomic_features, number_of_dimensions, phi_init, theta_pair_init, theta_singleton_init, theta_init, pseudoc, lambda, model_name, vi_step_size, vi_thresh) {
 	model_params <- list(theta_pair = theta_pair_init, 
-		theta_singleton = theta_singleton_init,
-		theta = theta_init,
-		mu = matrix(.5, num_samples, number_of_dimensions),
-		mu_pairwise = matrix(.5, num_samples, get_number_of_edge_pairs(number_of_dimensions)),
-		posterior = matrix(.5, num_samples, number_of_dimensions),
-		posterior_pairwise = matrix(.5, num_samples, get_number_of_edge_pairs(number_of_dimensions)),
-		num_samples = num_samples,
-		num_genomic_features = num_genomic_features,
-		number_of_dimensions = number_of_dimensions,
-		phi = phi_init,
-		lambda = lambda,
-		lambda_singleton = 0,  # No regularization of intercepts
-		lambda_pair = lambda,
-		pseudoc = pseudoc,
-		vi_step_size =vi_step_size,
-		vi_thresh = vi_thresh,
-		model_name = model_name)
+						 theta_singleton = theta_singleton_init,
+						 theta = theta_init,
+						 mu = matrix(.5, num_samples, number_of_dimensions),
+						 mu_pairwise = matrix(.5, num_samples, get_number_of_edge_pairs(number_of_dimensions)),
+						 posterior = matrix(.5, num_samples, number_of_dimensions),
+						 posterior_pairwise = matrix(.5, num_samples, get_number_of_edge_pairs(number_of_dimensions)),
+						 num_samples = num_samples,
+						 num_genomic_features = num_genomic_features,
+						 number_of_dimensions = number_of_dimensions,
+						 phi = phi_init,
+						 lambda = lambda,
+						 lambda_singleton = 0,  # No regularization of intercepts
+						 lambda_pair = lambda,
+						 pseudoc = pseudoc,
+						 vi_step_size =vi_step_size,
+						 vi_thresh = vi_thresh,
+						 model_name = model_name)
    return(model_params)
 }
 
@@ -355,7 +357,7 @@ compute_exact_crf_likelihood_for_lbfgs <- function(x, feat, discrete_outliers, p
 }
 
 
-# Calculate gradient of crf likelihood (fxn formatted to be used in LBFGS)
+# Calculate gradient of CRF likelihood (fxn formatted to be used in LBFGS)
 compute_exact_crf_gradient_for_lbfgs <- function(x, feat, discrete_outliers, posterior, posterior_pairwise, phi, lambda, lambda_pair, lambda_singleton, model_name) {
 	# Extract relevent scalers describing data
 	num_genomic_features <- ncol(feat)
@@ -409,7 +411,7 @@ compute_exact_crf_gradient_for_lbfgs <- function(x, feat, discrete_outliers, pos
 	return(-grad)
 }
 
-# Calculate pseudolikelihood of crf (fxn formatted to be used in LBFGS)
+# Calculate pseudolikelihood of CRF (fxn formatted to be used in LBFGS)
 compute_exact_crf_pseudolikelihood_for_lbfgs <- function(x, feat, discrete_outliers, posterior, posterior_pairwise, phi, lambda, lambda_pair, lambda_singleton) {
 	# Extract relevent scalers describing data
 	num_genomic_features <- ncol(feat)
@@ -430,7 +432,7 @@ compute_exact_crf_pseudolikelihood_for_lbfgs <- function(x, feat, discrete_outli
 	return(-log_likelihood)
 }
 
-# Calculate gradient of crf likelihood using Pseudolikelihood (fxn formatted to be used in LBFGS)
+# Calculate gradient of CRF likelihood using pseudolikelihood (fxn formatted to be used in L-BFGS)
 compute_exact_crf_pseudolikelihood_gradient_for_lbfgs <- function(x, feat, discrete_outliers, posterior, posterior_pairwise, phi, lambda, lambda_pair, lambda_singleton) {
 	# Extract relevent scalers describing data
 	num_genomic_features <- ncol(feat)
@@ -473,7 +475,7 @@ compute_exact_crf_pseudolikelihood_gradient_for_lbfgs <- function(x, feat, discr
 }
 
 
-# Compute MAP estimates theta (ie the coefficients defining the conditional random field (CRF))
+# Compute MAP estimates theta (i.e. the coefficients defining the conditional random field (CRF))
 map_crf <- function(feat, discrete_outliers, model_params) {
 	# Get single vector describing model parameters of the CRF
 	# It is necessary to do this because this is the format necessary for the LBFGS function
