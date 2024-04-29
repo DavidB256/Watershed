@@ -229,9 +229,9 @@ map_phi_initialization <- function(discrete_outliers, posterior, number_of_dimen
 	phi_inlier <- matrix(1, number_of_dimensions, num_bins)
 	# Count number of times we fall into each bin
 	for (bin_number in 1:num_bins) {
-		phi_outlier[,bin_number] <- colSums(((discrete_outliers==bin_number)*posterior),
+		phi_outlier[,bin_number] <- colSums(((discrete_outliers==bin_number) * posterior),
 							  				na.rm=TRUE)
-		phi_inlier[,bin_number] <- colSums(((discrete_outliers==bin_number)*(1-posterior)),
+		phi_inlier[,bin_number] <- colSums(((discrete_outliers==bin_number) * (1-posterior)),
 										   na.rm=TRUE)
 	}
 	# Add prior
@@ -240,8 +240,8 @@ map_phi_initialization <- function(discrete_outliers, posterior, number_of_dimen
 		phi_inlier[dimension_number,] = phi_inlier[dimension_number,] + pseudoc
 	}
 	# Normalize
-	phi_outlier <- phi_outlier/rowSums(phi_outlier)
-	phi_inlier <- phi_inlier/rowSums(phi_inlier)
+	phi_outlier <- phi_outlier / rowSums(phi_outlier)
+	phi_inlier <- phi_inlier / rowSums(phi_inlier)
 
 	# Combine into compact object
 	phi_init <- list(inlier_component = phi_inlier, outlier_component = phi_outlier)
@@ -266,7 +266,7 @@ initialize_model_params <- function(num_samples, num_genomic_features, number_of
 						 lambda_singleton = 0,  # No regularization of intercepts
 						 lambda_pair = lambda,
 						 pseudoc = pseudoc,
-						 vi_step_size =vi_step_size,
+						 vi_step_size = vi_step_size,
 						 vi_thresh = vi_thresh,
 						 model_name = model_name)
    return(model_params)
@@ -278,13 +278,16 @@ update_marginal_posterior_probabilities <- function(feat, discrete_outliers, mod
 	# Done seperately depending on model
 	if (model_params$model_name == "RIVER") {
 		# Compute Expectation in CPP file ("independent_crf_exact_updates.cpp")
-		posterior_list <- update_independent_marginal_probabilities_exact_inference_cpp(feat, discrete_outliers, model_params$theta_singleton, model_params$theta_pair, model_params$theta, model_params$phi$inlier_component, model_params$phi$outlier_component, model_params$number_of_dimensions, get_number_of_edge_pairs(model_params$number_of_dimensions), TRUE)
+		posterior_list <- update_independent_marginal_probabilities_exact_inference_cpp(feat, discrete_outliers, model_params$theta_singleton, model_params$theta_pair, model_params$theta, model_params$phi$inlier_component, model_params$phi$outlier_component, model_params$number_of_dimensions, get_number_of_edge_pairs(model_params$number_of_dimensions),
+																					    TRUE)
 	} else if (model_params$model_name == "Watershed_exact") {
 		# Compute Expectation in CPP file ("independent_crf_exact_updates.cpp")
-		posterior_list <- update_marginal_probabilities_exact_inference_cpp(feat, discrete_outliers, model_params$theta_singleton, model_params$theta_pair, model_params$theta, model_params$phi$inlier_component, model_params$phi$outlier_component, model_params$number_of_dimensions, choose(model_params$number_of_dimensions, 2), TRUE)
+		posterior_list <- update_marginal_probabilities_exact_inference_cpp(feat, discrete_outliers, model_params$theta_singleton, model_params$theta_pair, model_params$theta, model_params$phi$inlier_component, model_params$phi$outlier_component, model_params$number_of_dimensions, choose(model_params$number_of_dimensions, 2),
+																			TRUE)
 	} else if (model_params$model_name == "Watershed_approximate") {
 		# Compute Expectation in CPP file ("crf_variational_updates.cpp")
-		posterior_list <- update_marginal_probabilities_vi_cpp(feat, discrete_outliers, model_params$theta_singleton, model_params$theta_pair, model_params$theta, model_params$phi$inlier_component, model_params$phi$outlier_component, model_params$number_of_dimensions, choose(model_params$number_of_dimensions, 2), model_params$vi_step_size, model_params$vi_thresh, model_params$posterior, TRUE)
+		posterior_list <- update_marginal_probabilities_vi_cpp(feat, discrete_outliers, model_params$theta_singleton, model_params$theta_pair, model_params$theta, model_params$phi$inlier_component, model_params$phi$outlier_component, model_params$number_of_dimensions, choose(model_params$number_of_dimensions, 2), model_params$vi_step_size, model_params$vi_thresh, model_params$posterior,
+															   TRUE)
 	}
 	return(posterior_list)
 }
@@ -294,13 +297,16 @@ update_conditional_z_given_g_probabilities <- function(feat, discrete_outliers, 
 	# Done seperately depending on model
 	if (model_params$model_name == "RIVER") {
 		# Compute Expectation in CPP file ("independent_crf_exact_updates.cpp")
-		posterior_list <- update_independent_marginal_probabilities_exact_inference_cpp(feat, discrete_outliers, model_params$theta_singleton, model_params$theta_pair, model_params$theta, model_params$phi$inlier_component, model_params$phi$outlier_component, model_params$number_of_dimensions, get_number_of_edge_pairs(model_params$number_of_dimensions), FALSE)
+		posterior_list <- update_independent_marginal_probabilities_exact_inference_cpp(feat, discrete_outliers, model_params$theta_singleton, model_params$theta_pair, model_params$theta, model_params$phi$inlier_component, model_params$phi$outlier_component, model_params$number_of_dimensions, get_number_of_edge_pairs(model_params$number_of_dimensions),
+																					    FALSE)
 	} else if (model_params$model_name == "Watershed_exact") {
 		# Compute Expectation in CPP file ("independent_crf_exact_updates.cpp")
-		posterior_list <- update_marginal_probabilities_exact_inference_cpp(feat, discrete_outliers, model_params$theta_singleton, model_params$theta_pair, model_params$theta, model_params$phi$inlier_component, model_params$phi$outlier_component, model_params$number_of_dimensions, choose(model_params$number_of_dimensions, 2), FALSE)
+		posterior_list <- update_marginal_probabilities_exact_inference_cpp(feat, discrete_outliers, model_params$theta_singleton, model_params$theta_pair, model_params$theta, model_params$phi$inlier_component, model_params$phi$outlier_component, model_params$number_of_dimensions, choose(model_params$number_of_dimensions, 2),
+																			FALSE)
 	} else if (model_params$model_name == "Watershed_approximate") {
 		# Compute Expectation in CPP file ("crf_variational_updates.cpp")
-		posterior_list <- update_marginal_probabilities_vi_cpp(feat, discrete_outliers, model_params$theta_singleton, model_params$theta_pair, model_params$theta, model_params$phi$inlier_component, model_params$phi$outlier_component, model_params$number_of_dimensions, choose(model_params$number_of_dimensions, 2), model_params$vi_step_size, model_params$vi_thresh, model_params$posterior, FALSE)
+		posterior_list <- update_marginal_probabilities_vi_cpp(feat, discrete_outliers, model_params$theta_singleton, model_params$theta_pair, model_params$theta, model_params$phi$inlier_component, model_params$phi$outlier_component, model_params$number_of_dimensions, choose(model_params$number_of_dimensions, 2), model_params$vi_step_size, model_params$vi_thresh, model_params$posterior,
+															   FALSE)
 	}
 	return(posterior_list)
 }

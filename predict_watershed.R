@@ -48,10 +48,6 @@ learn_watershed_model_parameters_from_training_data <- function(training_input_f
 	return(list(mean_feat=mean_feat,sd_feat=sd_feat, model_params=watershed_model, gam_model_params=gam_data))
 }
 
-
-
-
-
 predict_watershed_posteriors <- function(watershed_object, prediction_input_file, number_dimensions) {
 	########################
 	## Load in prediction data
@@ -62,7 +58,6 @@ predict_watershed_posteriors <- function(watershed_object, prediction_input_file
 	predictions_discretized_outliers <- prediction_data_input$outliers_discrete
 	# Scale prediction features (according to mean and standard deviation from training data)
 	predictions_feat <- scale(predictions_feat, center=watershed_object$mean_feat, scale=watershed_object$sd_feat) 
-
 
 	########################
 	## Inference to compute Watershed posterior probabilities
@@ -78,8 +73,6 @@ predict_watershed_posteriors <- function(watershed_object, prediction_input_file
 
 	return(posterior_mat)
 }
-
-
 
 #########################################
 # Command line arguments

@@ -163,21 +163,21 @@ double compute_logistic_regression_likelihood_exact_inference_cpp(NumericMatrix 
 	for (int sample_num = 0; sample_num < feat.nrow(); sample_num++) {
 		// Calculate logistic regression normalization constant and substract from log likelihood
 		double normalization_constant = logistic_regression_normalization_constant(feat, intercept, theta, sample_num);
-		log_likelihood = log_likelihood - normalization_constant;
+		log_likelihood -= normalization_constant;
 		// Add contribution of features to likelihood
 		for (int d = 0; d < feat.ncol(); d++) {
-			log_likelihood += theta(d)*feat(sample_num, d)*posterior(sample_num, 0);
+			log_likelihood += theta(d) * feat(sample_num, d) * posterior(sample_num, 0);
 		}
 		// Add contribution of intercepts to likelihood
-		log_likelihood += intercept*posterior(sample_num, 0);
+		log_likelihood += intercept * posterior(sample_num, 0);
 	}
 
 	// Normalize likelihood by the number of samples
-	log_likelihood = log_likelihood/feat.nrow();
+	log_likelihood /= feat.nrow();
 
 	// Add L2 penalties
 	for (int d = 0; d < feat.ncol(); d++) {
-		log_likelihood = log_likelihood - .5*lambda*(theta(d)*theta(d));
+		log_likelihood -= .5 * lambda * theta(d) * theta(d);
 	}
 	return log_likelihood;
 }

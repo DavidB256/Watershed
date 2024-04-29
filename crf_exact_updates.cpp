@@ -121,7 +121,7 @@ double un_normalized_crf_weight(NumericMatrix all_binary_combinations_matrix, in
 		// Check to see if we are supposed to incorporate expression data && whether the expression data is observed
 		// I(E)log(p(E | Z))
 		// TODO: check replacing this line with just `if (posterior_bool) {`
-		if (posterior_bool == true && discrete_outliers(sample_num, dimension) == discrete_outliers(sample_num, dimension)) {
+		if (posterior_bool && discrete_outliers(sample_num, dimension) == discrete_outliers(sample_num, dimension)) {
 			if (all_binary_combinations_matrix(combination_number, dimension)) {
 				weight += log(phi_outlier(dimension, discrete_outliers(sample_num, dimension) - 1));
 			} else {
@@ -267,15 +267,15 @@ double compute_crf_likelihood_exact_inference_cpp(NumericMatrix posterior, Numer
 	int dimension_counter = 0;
 	for (int dimension = 0; dimension < number_of_dimensions; dimension++) {
 		// Generally do not regularize intercept terms (ie lambda_singleton is usually set to zero)
-		log_likelihood -= .5 * lambda_singleton * pow(theta_singleton(dimension), 2);
+		log_likelihood -= .5 * lambda_singleton * theta_singleton(dimension) * theta_singleton(dimension);
 		// Regularize edge weights
 		for (int dimension2=dimension+1; dimension2 < number_of_dimensions; dimension2++) {
-			log_likelihood -= .5 * lambda_pair * pow(theta_pair(0, dimension_counter), 2);
+			log_likelihood -= .5 * lambda_pair * theta_pair(0, dimension_counter) * theta_pair(0, dimension_counter);
 			dimension_counter += 1;
 		}
 		// Regularize feature vectors 
 		for (int d = 0; d < feat.ncol(); d++) {
-			log_likelihood -= .5 * lambda * pow(theta(d,dimension), 2);
+			log_likelihood -= .5 * lambda * theta(d, dimension) * theta(d, dimension);
 		}
 	}
 	return log_likelihood;
