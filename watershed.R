@@ -9,7 +9,7 @@ sourceCpp("crf_pseudolikelihood_updates.cpp")
 # Convert outlier status into discretized random variables
 get_discretized_outliers <- function(outlier_pvalues) {
 	# initialize output
-	outliers_discretized <- matrix(0,dim(outlier_pvalues)[1], dim(outlier_pvalues)[2])
+	outliers_discretized <- matrix(0, dim(outlier_pvalues)[1], dim(outlier_pvalues)[2])
 	for (dimension in 1:ncol(outlier_pvalues)) {
 		# Check if it is total expression
 		if (min(outlier_pvalues[,dimension], na.rm=TRUE) < 0) {
@@ -21,7 +21,7 @@ get_discretized_outliers <- function(outlier_pvalues) {
 		} else {
 			log_pvalues = -log10(abs(outlier_pvalues[,dimension]) + 1e-6)
 			# discretized <- cut(log_pvalues, 7)
-			discretized <- cut(log_pvalues, breaks=c(-.01,1,4,6))
+			discretized <- cut(log_pvalues, breaks=c(-.01, 1, 4, 6))
 		}
 		outliers_discretized[,dimension] = as.numeric(discretized)
 	}
@@ -33,14 +33,15 @@ get_discretized_outliers <- function(outlier_pvalues) {
 # Load in and parse Watershed input file
 load_watershed_data <- function(input_file, number_of_dimensions, pvalue_fraction, pvalue_threshold) {
 	raw_data <- read.table(input_file, header=TRUE)
-	# Get genomic features (first 2 columns are line identifiers and last (number_of_dimensions+1) columns are outlier status' and N2 pair
-	feat <- raw_data[,3:(ncol(raw_data)-number_of_dimensions-1)]
+	# Get genomic features (first 2 columns are line identifiers and last (number_of_dimensions+1) 
+	# columns are outlier status' and N2 pair identity
+	feat <- raw_data[, 3:(ncol(raw_data)-number_of_dimensions-1)]
+	# Put sample names in format "SubjectID:GeneName"
+	rownames(feat) <- paste(raw_data[,"SubjectID"], ":", raw_data[,"GeneName"], sep="")
+	# p-values of outlier status of a particular sample (rows) for a particular outlier type (columns)
+	outlier_pvalues <- as.matrix(raw_data[, (ncol(raw_data)-number_of_dimensions):(ncol(raw_data)-1)])
 	# sample name as SubjectID:GeneName
-	rownames(feat) <- paste(raw_data[,"SubjectID"], ":", raw_data[,"GeneName"],sep="")
-	# Pvalues of outlier status of a particular sample (rows) for a particular outlier type (columns)
-	outlier_pvalues <- as.matrix(raw_data[,(ncol(raw_data)-number_of_dimensions):(ncol(raw_data)-1)])
-	# sample name as SubjectID:GeneName
-	rownames(outlier_pvalues) <- paste(raw_data[,"SubjectID"], ":", raw_data[,"GeneName"],sep="")
+	rownames(outlier_pvalues) <- paste(raw_data[,"SubjectID"], ":", raw_data[,"GeneName"], sep="")
 	# Convert outlier status into binary random variables
 	fraction_outliers_binary <- ifelse(abs(outlier_pvalues)<=.1,1,0) # Strictly for initialization of binary output matrix
 	for (dimension_num in 1:number_of_dimensions) {
@@ -52,7 +53,7 @@ load_watershed_data <- function(input_file, number_of_dimensions, pvalue_fractio
 	# Convert outlier status into discretized random variables
 	outliers_discrete <- get_discretized_outliers(outlier_pvalues)
 	# Extract array of N2 pairs
-	N2_pairs=factor(raw_data[,"N2pair"], levels=unique(raw_data[,"N2pair"]))
+	N2_pairs <- factor(raw_data[,"N2pair"], levels=unique(raw_data[,"N2pair"]))
 	# Put all data into compact data structure
 	data_input <- list(feat=as.matrix(feat), outlier_pvalues=as.matrix(outlier_pvalues),outliers_binary=as.matrix(outliers_binary), fraction_outliers_binary=as.matrix(fraction_outliers_binary),outliers_discrete=outliers_discrete, N2_pairs=N2_pairs)
 	return(data_input)
@@ -113,7 +114,7 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
 	# Initialize logistic regression model parameters to zeros
 	gradient_variable_vec <- rep(0, number_of_features+1)
 	
-	#Randomly shuffle the data
+	# Shuffle the data
 	random_shuffling_indices <- sample(nrow(feat_train))
 	feat_train_shuff <- as.matrix(feat_train[random_shuffling_indices,])
 	binary_outliers_train_shuff <- as.matrix(binary_outliers_train[random_shuffling_indices,])
@@ -121,31 +122,33 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
 	##################################
 	# Select value of lambda to use
 	##################################
-	# If lambda_init == NA, we will do K-fold cross validation to select the optimal lambda
+	# If `lambda_init == NA`, we will do k-fold cross validation to select the optimal lambda
 	if (is.na(lambda_init)) {
-		#Create nfolds equally size folds
-		folds <- cut(seq(1,nrow(feat_train_shuff)),breaks=nfolds,labels=FALSE)
-		# Initialize array to keep track of the average Area Under (Precision-Recall Curve) across different values of lambda (lambda_costs)
+		#Create `nfolds` equal-size "folds," i.e. partitioning subsets of the data
+		folds <- cut(seq(1,nrow(feat_train_shuff)), breaks=nfolds, labels=FALSE)
+		# Initialize array to keep track of the average area under (precision-recall curve) across different values of lambda (lambda_costs)
 		avg_aucs <- c()
 
-		# Iterate across lambdas in lambda_costs 
-		for (cost_iter in 1:length(lambda_costs)) {
-			lambda <- lambda_costs[cost_iter]
+		# Iterate over `lambda` values in `lambda_costs` 
+		for (lambda in lambda_costs) {
 			# Initialize array to keep track of auc in each of the n-folds
 			aucs <- c()
 			# Loop through n-folds
 			for(i in 1:nfolds){
-				# Initialize array to keep track of logistic regression probabiliites in test samples (put in 'pos' array if we know test sample is positive via held out label. Other way around for 'neg' array)
+				# Initialize array to keep track of logistic regression probabiliites 
+				# in test samples (put in 'pos' array if we know test sample is 
+				# positive via held out label. Other way around for 'neg' array)
 				pos <- c()
 				neg <- c()
-    			#Segement your data into training and test for this fold
-    			testIndexes <- which(folds==i,arr.ind=TRUE)
-    			feat_test_fold <- feat_train_shuff[testIndexes,]
-    			outliers_test_fold <- as.matrix(binary_outliers_train_shuff[testIndexes,])
-    			feat_train_fold <- feat_train_shuff[-testIndexes,]
-    			outliers_train_fold <- as.matrix(binary_outliers_train_shuff[-testIndexes,])
+    			# Segment your data into training and test for this fold
+    			test_indices <- which(folds==i, arr.ind=TRUE)
+    			feat_test_fold <- feat_train_shuff[test_indices,]
+    			outliers_test_fold <- as.matrix(binary_outliers_train_shuff[test_indices,])
+				# Use as training data all that is not test data
+    			feat_train_fold <- feat_train_shuff[-test_indices,]
+    			outliers_train_fold <- as.matrix(binary_outliers_train_shuff[-test_indices,])
 
-    			# Perform logistic regression in each dimension seperately
+    			# Perform logistic regression in each dimension separately
     			for (dimension in 1:number_of_dimensions) {
     				# Remove any samples with NA for this outlier dimension
     				observed_training_indices <- !is.na(outliers_train_fold[,dimension])
@@ -159,7 +162,7 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
     				lbfgs_output <- lbfgs(compute_logistic_regression_likelihood, compute_logistic_regression_gradient, gradient_variable_vec, y=observed_training_outliers, feat=observed_training_feat, lambda=lambda, invisible=1)
     			 
     				if (lbfgs_output$convergence != 0 & lbfgs_output$convergence != 2) {
-    					print("ERRROR in logistic regression optimization!")
+    					print("Error: Optimization for logistic regression in GAM failed to converge.")
     					print(lbfgs_output$convergence)
     				}
 

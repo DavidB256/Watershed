@@ -112,9 +112,9 @@ if (number_of_dimensions==1 & model_name != "RIVER") {
 #########################################
 # If arguments$l2_prior_parameter == NA, perform grid search over the following values of lambda to determine optimal lambda
 lambda_costs <- c(.1, .01, 1e-3)
-# If arguments$l2_prior_parameter == NA, Number of folds to be used in K-fold cross validation for Genomic annotation model ()
+# If arguments$l2_prior_parameter == NA, k for k-fold cross validation for genomic annotation model
 nfolds <- 5
-# Parameters used for Variational Optimization (only applies if arguments$model_name=="Watershed_approximate")
+# Parameters used for Variational Optimization (only applies if `arguments$model_name=="Watershed_approximate"`)
 vi_step_size <- .8
 vi_threshold <- 1e-8
 
