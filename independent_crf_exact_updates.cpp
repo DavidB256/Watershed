@@ -81,17 +81,22 @@ List update_independent_marginal_probabilities_exact_inference_cpp(NumericMatrix
 		for (int dimension = 0; dimension < number_of_dimensions; dimension++) {
 			for (int dimension2=dimension; dimension2 < number_of_dimensions; dimension2++) {
 				if (dimension != dimension2) {
-					probabilities_pairwise(sample_num, dimension_counter) = probabilities(sample_num, dimension)*probabilities(sample_num, dimension2);
+					probabilities_pairwise(sample_num, dimension_counter) = probabilities(sample_num, dimension) * probabilities(sample_num, dimension2);
 					dimension_counter += 1;
 				}
 			}
 
 		}
 	}
-	List ret;
-	ret["probability"] = probabilities;
-	ret["probability_pairwise"] = probabilities_pairwise;
-	return ret;
+
+	cout << "tuh" << endl;
+	cout << probabilities << endl;
+	cout << probabilities_pairwise << endl;
+
+	List ret_list;
+	ret_list["probability"] = probabilities;
+	ret_list["probability_pairwise"] = probabilities_pairwise;
+	return ret_list;
 }
 
 // Compute likelihood for K=number_of_dimensions independent logistic regression models

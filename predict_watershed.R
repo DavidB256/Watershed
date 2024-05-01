@@ -27,7 +27,7 @@ learn_watershed_model_parameters_from_training_data <- function(training_input_f
 	gam_data <- logistic_regression_genomic_annotation_model_cv(feat_all, binary_outliers_all, nfolds, lambda_costs, lambda_init)
 	# Report optimal lambda learned from cross-validation data (if applicable)
 	if (is.na(lambda_init)) {
-		cat(paste0(nfolds,"-fold cross validation on GAM yielded optimal lambda of ", gam_data$lambda, "\n"))
+		cat(paste0(nfolds, "-fold cross validation on GAM yielded optimal lambda of ", gam_data$lambda, "\n"))
 	}
 
 	#######################################
@@ -36,8 +36,8 @@ learn_watershed_model_parameters_from_training_data <- function(training_input_f
 	# Compute GAM Predictions on data via function in  CPP file ("independent_crf_exact_updates.cpp")
 	gam_posterior_obj <- update_independent_marginal_probabilities_exact_inference_cpp(feat_all, binary_outliers_all, gam_data$gam_parameters$theta_singleton, gam_data$gam_parameters$theta_pair, gam_data$gam_parameters$theta, matrix(0,2,2), matrix(0,2,2), number_of_dimensions, choose(number_of_dimensions, 2), FALSE)
 	gam_posteriors <- gam_posterior_obj$probability
-	# Initialize Phi using GAM posteriors
-	# ie. Compute MAP estimates of the coefficients defined by P(outlier_status| FR)
+	# Initialize phi using GAM posteriors, i.e. compute MAP estimates of the 
+	# coefficients defined by P(outlier_status| FR)
 	phi_init <- map_phi_initialization(discrete_outliers_all, gam_posteriors, number_of_dimensions, pseudoc)
 
 	#######################################
@@ -111,7 +111,7 @@ if (number_of_dimensions==1 & model_name != "RIVER") {
 # Fixed Parameters
 #########################################
 # If arguments$l2_prior_parameter == NA, perform grid search over the following values of lambda to determine optimal lambda
-lambda_costs <- c(.1, .01, 1e-3)
+lambda_costs <- c(1e-1, 1e-2, 1e-3)
 # If arguments$l2_prior_parameter == NA, k for k-fold cross validation for genomic annotation model
 nfolds <- 5
 # Parameters used for Variational Optimization (only applies if `arguments$model_name=="Watershed_approximate"`)

@@ -43,11 +43,11 @@ load_watershed_data <- function(input_file, number_of_dimensions, pvalue_fractio
 	# sample name as SubjectID:GeneName
 	rownames(outlier_pvalues) <- paste(raw_data[,"SubjectID"], ":", raw_data[,"GeneName"], sep="")
 	# Convert outlier status into binary random variables
-	fraction_outliers_binary <- ifelse(abs(outlier_pvalues)<=.1,1,0) # Strictly for initialization of binary output matrix
+	fraction_outliers_binary <- ifelse(abs(outlier_pvalues)<=.1, 1, 0) # Strictly for initialization of binary output matrix
 	for (dimension_num in 1:number_of_dimensions) {
 		ordered <- sort(abs(outlier_pvalues[,dimension_num]))
-		max_val <- ordered[floor(length(ordered)*pvalue_fraction)]
-		fraction_outliers_binary[,dimension_num] <- ifelse(abs(outlier_pvalues[,dimension_num])<=max_val,1,0)
+		max_val <- ordered[floor(length(ordered) * pvalue_fraction)]
+		fraction_outliers_binary[,dimension_num] <- ifelse(abs(outlier_pvalues[,dimension_num]) <= max_val, 1, 0)
 	}
   	outliers_binary <- ifelse(abs(outlier_pvalues)<=pvalue_threshold,1,0)
 	# Convert outlier status into discretized random variables
@@ -94,11 +94,7 @@ compute_logistic_regression_gradient <- function(x, y, feat, lambda) {
 
 # Compute number of edge pairs. In general is just N choose 2. But if N==1, we use the hack the number of edge_pairs is 1
 get_number_of_edge_pairs <- function(number_of_dimensions) {
-  val = 1
-  if (number_of_dimensions > 1) {
-    val = choose(number_of_dimensions,2)
-  }
-  return(val)
+  return(max(1, choose(number_of_dimensions, 2)))
 }
 
 
@@ -154,6 +150,7 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
     				observed_training_indices <- !is.na(outliers_train_fold[,dimension])
     				observed_training_outliers <- as.matrix(outliers_train_fold[observed_training_indices, dimension])
     				observed_training_feat <- feat_train_fold[observed_training_indices,]
+
     				observed_testing_indices <- !is.na(outliers_test_fold[,dimension])
     				observed_testing_outliers <- as.matrix(outliers_test_fold[observed_testing_indices, dimension])
     				observed_testing_feat <- feat_test_fold[observed_testing_indices,]
@@ -187,7 +184,7 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
 		best_lambda <- lambda_costs[best_index]
 	# If lambda_init != NA, use the user-specified values
   	} else {
-  		best_lambda = lambda_init
+  		best_lambda <- lambda_init
   	}
 
 	##################################
@@ -196,7 +193,7 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
 	## 2. Use parameters in GAM to initialize watershed parameters
 	##################################
 	# Initialize parameter variables
-	theta_pair = matrix(0 ,1, get_number_of_edge_pairs(number_of_dimensions))
+	theta_pair = matrix(0, 1, get_number_of_edge_pairs(number_of_dimensions))
 	beta_init = matrix(0,number_of_features+1, number_of_dimensions)
 	theta_singleton = beta_init[1,]
 	theta = as.matrix(beta_init[2:(number_of_features + 1),])
@@ -213,7 +210,7 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
   		lbfgs_output <- lbfgs(compute_logistic_regression_likelihood, compute_logistic_regression_gradient, gradient_variable_vec, y=observed_training_outliers, feat=observed_training_feat, lambda=best_lambda, invisible=1)
 
   		if (lbfgs_output$convergence != 0 & lbfgs_output$convergence != 2) {
-    		print("ERROR:")
+    		print("Error: L-BFGS algorithm fitting logistic regression model failed to converge.")
     		print(lbfgs_output$convergence)
     	}
     	# Add optimal GAM parameters to data structure
@@ -224,9 +221,11 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
 }
 
 
-# Compute MAP estimates of the coefficients defined by P(outlier_status | FR)
-map_phi_initialization <- function(discrete_outliers, posterior, number_of_dimensions, pseudoc) {
-	num_bins = 3
+# Compute MAP estimates of the coefficients defined by P(outlier_status | G)
+map_phi_initialization <- function(discrete_outliers, posterior, number_of_dimensions, pseudocounts, num_bins=3) {
+	# `num_bins` is the number of bins supported by the categorical distributions
+	# of each outlier variable E_k.
+
 	# Initialize output matrices
 	phi_outlier <- matrix(1, number_of_dimensions, num_bins)  
 	phi_inlier <- matrix(1, number_of_dimensions, num_bins)
@@ -234,20 +233,20 @@ map_phi_initialization <- function(discrete_outliers, posterior, number_of_dimen
 	for (bin_number in 1:num_bins) {
 		phi_outlier[,bin_number] <- colSums(((discrete_outliers==bin_number) * posterior),
 							  				na.rm=TRUE)
-		phi_inlier[,bin_number] <- colSums(((discrete_outliers==bin_number) * (1-posterior)),
+		phi_inlier[,bin_number] <- colSums(((discrete_outliers==bin_number) * (1 - posterior)),
 										   na.rm=TRUE)
 	}
 	# Add prior
 	for (dimension_number in 1:number_of_dimensions) {
-		phi_outlier[dimension_number,] = phi_outlier[dimension_number,] + pseudoc
-		phi_inlier[dimension_number,] = phi_inlier[dimension_number,] + pseudoc
+		phi_outlier[dimension_number,] = phi_outlier[dimension_number,] + pseudocounts
+		phi_inlier[dimension_number,] = phi_inlier[dimension_number,] + pseudocounts
 	}
 	# Normalize
 	phi_outlier <- phi_outlier / rowSums(phi_outlier)
 	phi_inlier <- phi_inlier / rowSums(phi_inlier)
 
 	# Combine into compact object
-	phi_init <- list(inlier_component = phi_inlier, outlier_component = phi_outlier)
+	phi_init <- list(inlier_component=phi_inlier, outlier_component=phi_outlier)
 
 	return(phi_init)
 }
