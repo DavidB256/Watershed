@@ -4,7 +4,7 @@ source("watershed.R")
 #######################################
 ## Train Watershed model on training data
 #######################################
-learn_watershed_model_parameters_from_training_data <- function(training_input_file, number_of_dimensions, model_name, pseudoc, lambda_init, binary_pvalue_threshold, lambda_costs, nfolds, vi_step_size, vi_threshold) {
+learn_watershed_model_parameters_from_training_data <- function(training_input_file, number_of_dimensions, model_name, pseudocounts, lambda_init, binary_pvalue_threshold, lambda_costs, nfolds, vi_step_size, vi_threshold) {
 	########################
 	## Load in data
 	########################
@@ -31,21 +31,21 @@ learn_watershed_model_parameters_from_training_data <- function(training_input_f
 	}
 
 	#######################################
-	### Initialize phi using GAM
+	### Initialize phi using alpha and beta from GAM
 	#######################################
 	# Compute GAM Predictions on data via function in  CPP file ("independent_crf_exact_updates.cpp")
 	gam_posterior_obj <- update_independent_marginal_probabilities_exact_inference_cpp(feat_all, binary_outliers_all, gam_data$gam_parameters$theta_singleton, gam_data$gam_parameters$theta_pair, gam_data$gam_parameters$theta, matrix(0,2,2), matrix(0,2,2), number_of_dimensions, choose(number_of_dimensions, 2), FALSE)
 	gam_posteriors <- gam_posterior_obj$probability
 	# Initialize phi using GAM posteriors, i.e. compute MAP estimates of the 
 	# coefficients defined by P(outlier_status| FR)
-	phi_init <- map_phi_initialization(discrete_outliers_all, gam_posteriors, number_of_dimensions, pseudoc)
+	phi_init <- map_phi_initialization(discrete_outliers_all, gam_posteriors, number_of_dimensions, pseudocounts)
 
 	#######################################
 	### Fit Watershed Model
 	#######################################
-	watershed_model <- train_watershed_model(feat_all, discrete_outliers_all, phi_init, gam_data$gam_parameters$theta_pair, gam_data$gam_parameters$theta_singleton, gam_data$gam_parameters$theta, pseudoc, gam_data$lambda, number_of_dimensions, model_name, vi_step_size, vi_threshold)
+	watershed_model <- train_watershed_model(feat_all, discrete_outliers_all, phi_init, gam_data$gam_parameters$theta_pair, gam_data$gam_parameters$theta_singleton, gam_data$gam_parameters$theta, pseudocounts, gam_data$lambda, number_of_dimensions, model_name, vi_step_size, vi_threshold)
 
-	return(list(mean_feat=mean_feat,sd_feat=sd_feat, model_params=watershed_model, gam_model_params=gam_data))
+	return(list(mean_feat=mean_feat, sd_feat=sd_feat, model_params=watershed_model, gam_model_params=gam_data))
 }
 
 predict_watershed_posteriors <- function(watershed_object, prediction_input_file, number_dimensions) {
@@ -82,7 +82,7 @@ arguments <- parse_args(OptionParser(usage = "%prog [options]", description="Wat
 		make_option(c("-t","--training_input"), default = NULL, help="The Watershed input file containing instances used to train the model [default %default]"),
 		make_option(c("-i","--prediction_input"), default = NULL, help="The Watershed input file containing instances to predict on"),
 		make_option(c("-d","--number_dimensions"), default=1, help="The number of outlier variables."),
-		make_option(c("-m","--model_name"), default="Watershed_exact", help="Name of model. Options are Watershed_exact, Watershed_approximate, and RIVER"),
+		make_option(c("-m","--model_name"), default="Watershed_exact", help="Name of model. Options are Watershed_exact, Watershed_approximate, RIVER"),
 		make_option(c("-p","--dirichlet_prior_parameter"), default=10, help="Parameter defining Dirichlet distribution the acts as a prior a Phi (the model parameters defining E|Z"),
 		make_option(c("-l","--l2_prior_parameter"), default=.01, help="Parameter defining L2 (gaussian) distribution the acts as a prior on the parameters of the conditional random Field (the model parameters defining Z|G"),
 		make_option(c("-o","--output_prefix"), default="watershed", help="Prefix of file name to save results to"),
@@ -93,7 +93,7 @@ training_input_file <- arguments$training_input
 prediction_input_file <- arguments$prediction_input
 number_of_dimensions <- arguments$number_dimensions
 model_name <- arguments$model_name
-pseudoc <- arguments$dirichlet_prior_parameter
+pseudocounts <- arguments$dirichlet_prior_parameter
 lambda_init <- arguments$l2_prior_parameter
 if (lambda_init == "NA") {
 	lambda_init <- NA
@@ -124,7 +124,7 @@ set.seed(1)
 #######################################
 ## Train Watershed model on training data
 #######################################
-watershed_object <- learn_watershed_model_parameters_from_training_data(training_input_file, number_of_dimensions, model_name, pseudoc, lambda_init, binary_pvalue_threshold, lambda_costs, nfolds, vi_step_size, vi_threshold)
+watershed_object <- learn_watershed_model_parameters_from_training_data(training_input_file, number_of_dimensions, model_name, pseudocounts, lambda_init, binary_pvalue_threshold, lambda_costs, nfolds, vi_step_size, vi_threshold)
 
 #######################################
 ## Save trained object as .rds file
@@ -142,5 +142,5 @@ posteriors <- predict_watershed_posteriors(watershed_object, prediction_input_fi
 ## Save Watershed posterior predictions to outputfile
 #######################################
 output_file <- paste0(output_stem, "_posterior_probability.txt")
-write.table(posteriors,file=output_file, sep="\t", quote=FALSE, row.names=FALSE)
+write.table(posteriors, file=output_file, sep="\t", quote=FALSE, row.names=FALSE)
 

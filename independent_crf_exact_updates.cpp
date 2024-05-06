@@ -14,21 +14,29 @@ double un_normalized_independent_crf_weight(int dimension, int combination_numbe
 	double weight = 0;
 	int dimension_counter = 0;
 	// Contribution from intercept
-	weight += combination_number*theta_singleton(dimension);
+	weight += combination_number * theta_singleton(dimension);
 	// Contribution from features
 	for (int d = 0; d < feat.ncol(); d++) {
-		weight += combination_number*feat(sample_num,d)*theta(d,dimension);
+		weight += combination_number * feat(sample_num, d) * theta(d, dimension);
 	}
+
 	// If posterior_bool is true and outlier measurement is observed, add contribution of E
-	if (posterior_bool == true && discrete_outliers(sample_num, dimension) == discrete_outliers(sample_num, dimension)) {
+	// TODO: Fix tautological condition?
+	if (posterior_bool && discrete_outliers(sample_num, dimension) == discrete_outliers(sample_num, dimension)) {
 		// Z == 1
 		if (combination_number == 1) {
 			weight += log(phi_outlier(dimension, discrete_outliers(sample_num, dimension) - 1));
 		// Z == 0
-		} else {
+		} else if (combination_number == 0) {
 			weight += log(phi_inlier(dimension, discrete_outliers(sample_num, dimension) - 1));
 		}
 	}
+
+	std::cout << phi_inlier.nrow() << " " << phi_inlier.ncol() << std::endl;
+	std::cout << phi_outlier.nrow() << " " << phi_outlier.ncol() << std::endl;
+	std::cout << phi_inlier << std::endl << std::endl;
+	std::cout << phi_outlier << std::endl << std::endl;
+
 	return weight;
 }
 
@@ -39,12 +47,11 @@ double exact_independent_normalization_constant(NumericMatrix feat, NumericMatri
 	// Loop through all possible outcomes of logistic regression (only two outcomes)
 	for (int combination_number = 0; combination_number < 2; combination_number++) {
 		// For each outcome, calculate the relative weight
-		double un_normalized_wight = un_normalized_independent_crf_weight(dimension, combination_number, feat, discrete_outliers, theta_singleton, theta_pair, theta, phi_inlier, phi_outlier, number_of_dimensions, sample_num, posterior_bool);
-		val += exp(un_normalized_wight);
+		double un_normalized_weight = un_normalized_independent_crf_weight(dimension, combination_number, feat, discrete_outliers, theta_singleton, theta_pair, theta, phi_inlier, phi_outlier, number_of_dimensions, sample_num, posterior_bool);
+		val += exp(un_normalized_weight);
 	}
 	return log(val);
 }
-
 
 // Compute logistic regression probability for a specific (sample, dimension) pair
 double exact_independent_marginal_probability(double normalization_constant, NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, int dimension, bool posterior_bool) {
@@ -55,10 +62,9 @@ double exact_independent_marginal_probability(double normalization_constant, Num
 	return marginal_prob;
 }
 
-
 // Compute both marginal Posterior probability latent variable as well as marginal pairwise probabilities
-// If posterior_bool==true, compute P(Z|E,G)
-// If posterior_bool==false, compute P(Z|G)
+// If posterior_bool==true, compute P(Z | E, G, theta, phi)
+// If posterior_bool==false, compute P(Z | G, theta)
 // [[Rcpp::export]]
 List update_independent_marginal_probabilities_exact_inference_cpp(NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int number_of_pairs, bool posterior_bool) {
 	// Initialize output matrices
@@ -88,10 +94,6 @@ List update_independent_marginal_probabilities_exact_inference_cpp(NumericMatrix
 
 		}
 	}
-
-	cout << "tuh" << endl;
-	cout << probabilities << endl;
-	cout << probabilities_pairwise << endl;
 
 	List ret_list;
 	ret_list["probability"] = probabilities;
