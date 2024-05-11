@@ -9,7 +9,7 @@
 using namespace Rcpp;
 
 // Calculate the un-normalized pseudolikelihood weight for this value
-double un_normalized_pseudolikelihood_crf_weight(int dimension, int combination_number, NumericMatrix feat, NumericMatrix posterior, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, bool posterior_bool) {
+double un_normalized_pseudolikelihood_crf_weight(int dimension, int combination_number, NumericMatrix feat, NumericMatrix posterior, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, bool posterior_bool) {
 	// Initialize weight
 	double weight = 0;
 	// Add contribution from intercept
@@ -36,16 +36,22 @@ double un_normalized_pseudolikelihood_crf_weight(int dimension, int combination_
 	// Check to see if we are supposed to incorperate expression data && whether the expression data is observed
 	if (posterior_bool == true && discrete_outliers(sample_num, dimension) == discrete_outliers(sample_num, dimension)) {
 		if (combination_number == 1) {
-			weight += log(phi_outlier(dimension, discrete_outliers(sample_num, dimension) - 1));
+			for (int ind = 0; ind < discrete_outliers(sample_num, dimension).size(); ind += 2) {
+				int discrete_outlier = discrete_outliers(sample_num, dimension)[ind] - '0';
+				weight += log(phi_outlier(dimension, discrete_outlier - 1));
+			}
 		} else {
-			weight += log(phi_inlier(dimension, discrete_outliers(sample_num, dimension) - 1));
+			for (int ind = 0; ind < discrete_outliers(sample_num, dimension).size(); ind += 2) {
+				int discrete_outlier = discrete_outliers(sample_num, dimension)[ind] - '0';
+				weight += log(phi_inlier(dimension, discrete_outlier - 1));
+			}
 		}
 	}
 	return weight;
 }
 
 // Extract normalization constant for this (sample, dimension) pair
-double exact_pseudolikelihood_normalization_constant(NumericMatrix feat, NumericMatrix discrete_outliers, NumericMatrix posterior, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, int dimension, bool posterior_bool) {
+double exact_pseudolikelihood_normalization_constant(NumericMatrix feat, StringMatrix discrete_outliers, NumericMatrix posterior, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, int dimension, bool posterior_bool) {
 	// Initialize normalization constant
 	double val = 0;
 	// Loop through all possible values this dimension can take on according to pseudolikelihood (ie. 2 values: 0 or 1)
@@ -60,7 +66,7 @@ double exact_pseudolikelihood_normalization_constant(NumericMatrix feat, Numeric
 // Compute probabilitiy P(Z_dimension=1) for the current sample according to the pseudolikelihood
 // If posterior_bool == true, compute P(Z_dimension = 1 | G,E)
 // If posterior_bool == false, compute P(Z_dimension = 1 | G)
-double exact_pseudolikelihood_marginal_probability(double normalization_constant, NumericMatrix feat, NumericMatrix discrete_outliers, NumericMatrix posterior, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, int dimension, bool posterior_bool) {	
+double exact_pseudolikelihood_marginal_probability(double normalization_constant, NumericMatrix feat, StringMatrix discrete_outliers, NumericMatrix posterior, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, int dimension, bool posterior_bool) {	
 	int combination_number = 1;
 	double marginal_prob = exp(un_normalized_pseudolikelihood_crf_weight(dimension, combination_number, feat, posterior, discrete_outliers, theta_singleton, theta_pair, theta, phi_inlier, phi_outlier, number_of_dimensions, sample_num, posterior_bool) - normalization_constant);
 	return marginal_prob;
@@ -71,7 +77,7 @@ double exact_pseudolikelihood_marginal_probability(double normalization_constant
 // If posterior_bool==true, compute P(Z|E,G)
 // If posterior_bool==false, compute P(Z|G)
 // [[Rcpp::export]]
-List update_pseudolikelihood_marginal_probabilities_exact_inference_cpp(NumericMatrix feat, NumericMatrix discrete_outliers, NumericMatrix posterior, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int number_of_pairs, bool posterior_bool) {
+List update_pseudolikelihood_marginal_probabilities_exact_inference_cpp(NumericMatrix feat, StringMatrix discrete_outliers, NumericMatrix posterior, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int number_of_pairs, bool posterior_bool) {
 	// Initialize output matrices
 	NumericMatrix probabilities(feat.nrow(), number_of_dimensions);
 	// Note: There are two pairwise probabilities as we are using psuedolikelihood
@@ -111,7 +117,7 @@ List update_pseudolikelihood_marginal_probabilities_exact_inference_cpp(NumericM
 
 // Compute exact pseudo-likelihood of K=number_of_dimensions dimensionsal Conditional Random Field (CRF)
 // [[Rcpp::export]]
-double compute_pseudolikelihood_crf_likelihood_exact_inference_cpp(NumericMatrix posterior, NumericMatrix posterior_pairwise, NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, double lambda, double lambda_pair, double lambda_singleton) {
+double compute_pseudolikelihood_crf_likelihood_exact_inference_cpp(NumericMatrix posterior, NumericMatrix posterior_pairwise, NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, double lambda, double lambda_pair, double lambda_singleton) {
 	// Initialize output likelihood
 	double log_likelihood = 0;
 	// Loop through samples

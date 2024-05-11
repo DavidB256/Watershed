@@ -9,7 +9,7 @@
 using namespace Rcpp;
 
 // For a logistic regression outcome (combination number), compute the relative logistic regressin weight
-double un_normalized_independent_crf_weight(int dimension, int combination_number, NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, bool posterior_bool) {
+double un_normalized_independent_crf_weight(int dimension, int combination_number, NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, bool posterior_bool) {
 	// Initialize weight
 	double weight = 0;
 	int dimension_counter = 0;
@@ -25,10 +25,16 @@ double un_normalized_independent_crf_weight(int dimension, int combination_numbe
 	if (posterior_bool && discrete_outliers(sample_num, dimension) == discrete_outliers(sample_num, dimension)) {
 		// Z == 1
 		if (combination_number == 1) {
-			weight += log(phi_outlier(dimension, discrete_outliers(sample_num, dimension) - 1));
+			for (int ind = 0; ind < discrete_outliers(sample_num, dimension).size(); ind += 2) {
+				int discrete_outlier = discrete_outliers(sample_num, dimension)[ind] - '0';
+				weight += log(phi_outlier(dimension, discrete_outlier - 1));
+			}
 		// Z == 0
 		} else if (combination_number == 0) {
-			weight += log(phi_inlier(dimension, discrete_outliers(sample_num, dimension) - 1));
+			for (int ind = 0; ind < discrete_outliers(sample_num, dimension).size(); ind += 2) {
+				int discrete_outlier = discrete_outliers(sample_num, dimension)[ind] - '0';
+				weight += log(phi_inlier(dimension, discrete_outlier - 1));
+			}
 		}
 	}
 
@@ -41,7 +47,7 @@ double un_normalized_independent_crf_weight(int dimension, int combination_numbe
 }
 
 // Compute logistic normalization constant
-double exact_independent_normalization_constant(NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, int dimension, bool posterior_bool) {
+double exact_independent_normalization_constant(NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, int dimension, bool posterior_bool) {
 	// Initialize variable to keep track of the normalization constant
 	double val = 0;
 	// Loop through all possible outcomes of logistic regression (only two outcomes)
@@ -54,7 +60,7 @@ double exact_independent_normalization_constant(NumericMatrix feat, NumericMatri
 }
 
 // Compute logistic regression probability for a specific (sample, dimension) pair
-double exact_independent_marginal_probability(double normalization_constant, NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, int dimension, bool posterior_bool) {
+double exact_independent_marginal_probability(double normalization_constant, NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, int dimension, bool posterior_bool) {
 	// Predict P(Z=1)
 	int combination_number = 1;
 	double marginal_prob = exp(un_normalized_independent_crf_weight(dimension, combination_number, feat, discrete_outliers, theta_singleton, theta_pair, theta, phi_inlier, phi_outlier, number_of_dimensions, sample_num, posterior_bool) - normalization_constant);
@@ -66,7 +72,7 @@ double exact_independent_marginal_probability(double normalization_constant, Num
 // If posterior_bool==true, compute P(Z | E, G, theta, phi)
 // If posterior_bool==false, compute P(Z | G, theta)
 // [[Rcpp::export]]
-List update_independent_marginal_probabilities_exact_inference_cpp(NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int number_of_pairs, bool posterior_bool) {
+List update_independent_marginal_probabilities_exact_inference_cpp(NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int number_of_pairs, bool posterior_bool) {
 	// Initialize output matrices
 	NumericMatrix probabilities(feat.nrow(), number_of_dimensions);
 	NumericMatrix probabilities_pairwise(feat.nrow(), number_of_pairs);
@@ -103,7 +109,7 @@ List update_independent_marginal_probabilities_exact_inference_cpp(NumericMatrix
 
 // Compute likelihood for K=number_of_dimensions independent logistic regression models
 // [[Rcpp::export]]
-double compute_independent_crf_likelihood_exact_inference_cpp(NumericMatrix posterior, NumericMatrix posterior_pairwise, NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, double lambda, double lambda_pair, double lambda_singleton) {
+double compute_independent_crf_likelihood_exact_inference_cpp(NumericMatrix posterior, NumericMatrix posterior_pairwise, NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, double lambda, double lambda_pair, double lambda_singleton) {
 	// Initialize output likelihood
 	double log_likelihood = 0;
 	// Loop through samples

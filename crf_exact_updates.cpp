@@ -94,7 +94,7 @@ NumericMatrix extract_all_binary_combinations_ignoring_two_row(int n, int column
 }
 
 // For a CRF value (particular row in `all_binary_combinations_matrix`), compute the relative CRF weight
-double un_normalized_crf_weight(NumericMatrix all_binary_combinations_matrix, int combination_number, NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, bool posterior_bool) {
+double un_normalized_crf_weight(NumericMatrix all_binary_combinations_matrix, int combination_number, NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, bool posterior_bool) {
 	// Initialize weight
 	double weight = 0;
 	int dimension_counter = 0;
@@ -123,9 +123,15 @@ double un_normalized_crf_weight(NumericMatrix all_binary_combinations_matrix, in
 		// I(E)log(p(E | Z))
 		if (posterior_bool && discrete_outliers(sample_num, dimension) == discrete_outliers(sample_num, dimension)) {
 			if (all_binary_combinations_matrix(combination_number, dimension)) {
-				weight += log(phi_outlier(dimension, discrete_outliers(sample_num, dimension) - 1));
+				for (int ind = 0; ind < discrete_outliers(sample_num, dimension).size(); ind += 2) {
+					int discrete_outlier = discrete_outliers(sample_num, dimension)[ind] - '0';
+					weight += log(phi_outlier(dimension, discrete_outlier - 1));
+				}
 			} else {
-				weight += log(phi_inlier(dimension, discrete_outliers(sample_num, dimension) - 1));
+				for (int ind = 0; ind < discrete_outliers(sample_num, dimension).size(); ind += 2) {
+					int discrete_outlier = discrete_outliers(sample_num, dimension)[ind] - '0';
+					weight += log(phi_inlier(dimension, discrete_outlier - 1));
+				}
 			}
 		}
 	}
@@ -133,7 +139,7 @@ double un_normalized_crf_weight(NumericMatrix all_binary_combinations_matrix, in
 }
 
 // Compute CRF normalization constant for a specifc sample
-double exact_normalization_constant(NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, bool posterior_bool) {
+double exact_normalization_constant(NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, bool posterior_bool) {
 	// Extract matrix summarizing all possible values the CRF can take on
 	// Create matrix of dimension 2^(number_of_dimensions) x number_of_dimensions
 	// Each row of this matrix summarizes all possible binary values that CRF can take on
@@ -150,7 +156,7 @@ double exact_normalization_constant(NumericMatrix feat, NumericMatrix discrete_o
 }
 
 // Compute probability of the CRF state z, P(Z = z)
-double exact_probability(double normalization_constant, NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, int combination_number,NumericMatrix all_binary_combinations_ignoring_one_row, bool posterior_bool) {
+double exact_probability(double normalization_constant, NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, int combination_number,NumericMatrix all_binary_combinations_ignoring_one_row, bool posterior_bool) {
 	double prob = exp(un_normalized_crf_weight(all_binary_combinations_ignoring_one_row, combination_number, feat, discrete_outliers, theta_singleton, theta_pair, theta, phi_inlier, phi_outlier, number_of_dimensions, sample_num, posterior_bool) 
 				  	  - normalization_constant);
 	return prob;
@@ -160,7 +166,7 @@ double exact_probability(double normalization_constant, NumericMatrix feat, Nume
 // Compute P(Z_dimension=1|G) if posterior_bool==false
 // Compute P(Z_dimension=1|G,E) if posterior_bool==true
 // Involves marginalizing out all other dimensions
-double exact_marginal_probability(double normalization_constant, NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, int dimension, bool posterior_bool) {
+double exact_marginal_probability(double normalization_constant, NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, int dimension, bool posterior_bool) {
 	// Create matrix of dimension 2^(number_of_dimensions-1) X number_of_dimensions
 	// Each row of this matrix summarizes all possible binary values that CRF can take on assuming the values of in column column_to_ignore are fixed to be 1
 	NumericMatrix all_binary_combinations_ignoring_one_row = extract_all_binary_combinations_ignoring_one_row(number_of_dimensions, dimension);
@@ -177,7 +183,7 @@ double exact_marginal_probability(double normalization_constant, NumericMatrix f
 // Compute P(Z_dimension1=1, Z_dimension2=1 | G) if `posterior_bool==false`
 // Compute P(Z_dimension1=1, Z_dimension2=1 | G, E) if `posterior_bool==true`
 // Involves marginalizing out all other dimensions
-double exact_marginal_pairwise_probability(double normalization_constant, int dimension1, int dimension2, int dimension_counter, NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, bool posterior_bool) {
+double exact_marginal_pairwise_probability(double normalization_constant, int dimension1, int dimension2, int dimension_counter, NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int sample_num, bool posterior_bool) {
 	// Initialize marginal probability variable
 	double marginal_prob = 0;
 	// Create matrix of dimension 2^(number_of_dimensions-2) X number_of_dimensions
@@ -195,7 +201,7 @@ double exact_marginal_pairwise_probability(double normalization_constant, int di
 // Compute P(Z | E, G) if `posterior_bool==true`
 // Compute P(Z | G) if `posterior_bool==false`
 // [[Rcpp::export]]
-List update_marginal_probabilities_exact_inference_cpp(NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int number_of_pairs, bool posterior_bool) {
+List update_marginal_probabilities_exact_inference_cpp(NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int number_of_pairs, bool posterior_bool) {
 	// Initialize output matrices
 	NumericMatrix probabilities(feat.nrow(), number_of_dimensions);
 	NumericMatrix probabilities_pairwise(feat.nrow(), number_of_pairs);
@@ -229,7 +235,7 @@ List update_marginal_probabilities_exact_inference_cpp(NumericMatrix feat, Numer
 
 // Compute exact likelihood of K=number_of_dimensions dimensionsal Conditional Random Field (CRF)
 // [[Rcpp::export]]
-double compute_crf_likelihood_exact_inference_cpp(NumericMatrix posterior, NumericMatrix posterior_pairwise, NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, double lambda, double lambda_pair, double lambda_singleton) {
+double compute_crf_likelihood_exact_inference_cpp(NumericMatrix posterior, NumericMatrix posterior_pairwise, NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, double lambda, double lambda_pair, double lambda_singleton) {
 	// Initialize output likelihood
 	double log_likelihood = 0;
 	// Loop through samples

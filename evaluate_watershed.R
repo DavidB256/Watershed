@@ -83,7 +83,6 @@ evaluate_watershed_shell <- function(input_file, number_of_dimensions, model_nam
   		binary_outliers_test2 <- as.matrix(c(fraction_binary_outliers_all[!is.na(N2_pairs)][seq(from=2,to=sum(!is.na(N2_pairs)),by=2)], fraction_binary_outliers_all[!is.na(N2_pairs)][seq(from=1,to=sum(!is.na(N2_pairs)),by=2)]))
 		# Absolute pvalues from test prediction data set (to be used for RNA-only analysis)
   		real_valued_outliers_test1 <- -log10(abs(as.matrix(c(data_input$outlier_pvalues[!is.na(N2_pairs)][seq(from=1,to=sum(!is.na(N2_pairs)),by=2)], data_input$outlier_pvalues[!is.na(N2_pairs)][seq(from=2,to=sum(!is.na(N2_pairs)),by=2)]))) + 1e-7)
-
 	} else {
 		# Extraction of test data for Watershed
   		feat_test <- rbind(feat_all[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),], feat_all[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),])
@@ -148,12 +147,6 @@ evaluate_watershed_shell <- function(input_file, number_of_dimensions, model_nam
 	return(list(auc=auc_object_across_dimensions, model_params=watershed_model, gam_model_params=gam_data))
 }
 
-
-
-
-
-
-
 #########################################
 # Command line arguments
 #########################################
@@ -201,7 +194,6 @@ vi_threshold <- 1e-8
 # Set seed for reproducability (feel free to change!)
 set.seed(1)
 
-
 #######################################
 ## Train model on non-N2 pairs and evaluate model on N2-pairs
 #######################################
@@ -212,7 +204,6 @@ evaluation_object <- evaluate_watershed_shell(input_file, number_of_dimensions, 
 ## Save evaluation object as .rds file
 #######################################
 saveRDS(evaluation_object, paste0(output_stem, "_evaluation_object.rds"))
-
 
 #######################################
 ## Print area under precision-recall curves in each dimension

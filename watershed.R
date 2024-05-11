@@ -1,5 +1,6 @@
 library(lbfgs)
 library(Rcpp)
+library(dplyr)
 sourceCpp("crf_exact_updates.cpp")
 #sourceCpp("crf_variational_updates.cpp")
 sourceCpp("independent_crf_exact_updates.cpp")
@@ -35,32 +36,49 @@ get_discretized_outliers <- function(outlier_pvalues) {
 # Load in and parse Watershed input file
 load_watershed_data <- function(input_file, number_of_dimensions, pvalue_fraction, pvalue_threshold) {
 	raw_data <- read.table(input_file, header=TRUE)
-	# Get genomic features (first 2 columns are line identifiers and last `number_of_dimensions+2`
-	# columns are outlier status, group label, and group belonging, respectively)
-	feat <- raw_data[, 3:(ncol(raw_data)-number_of_dimensions-2)]
+
+	pheno_cols <- (ncol(raw_data)-number_of_dimensions):(ncol(raw_data)-1)
+	raw_data[pheno_cols] <- get_discretized_outliers(raw_data[pheno_cols])
+
+	rd_grouped <- raw_data %>% group_by(group_ID)
+
+	raw_data <- left_join(rd_grouped %>% summarize_at(1, paste, collapse="_"),
+			  rd_grouped %>% summarize_at(2, first), by="group_ID") %>%
+		left_join(rd_grouped %>% summarize_at(3:(pheno_cols[1]-1), first), by="group_ID") %>%
+		left_join(rd_grouped %>% summarize_at(pheno_cols, paste, collapse=","), by="group_ID") %>%
+		select(-1, 1)
+	
+	raw_data <- as.data.frame(raw_data)
+
+	# columns are outlier status and group label)
+	feat <- raw_data[, 3:(ncol(raw_data)-number_of_dimensions-1)]
 	# Put sample names in format "SubjectID:GeneName"
 	rownames(feat) <- paste0(raw_data[,"SubjectID"], ":", raw_data[,"GeneName"])
-	# p-values of outlier status of a particular sample (rows) for a particular outlier type (columns)
-	outlier_pvalues <- as.matrix(raw_data[, (ncol(raw_data)-number_of_dimensions-1):(ncol(raw_data)-2)])
-	# sample name as SubjectID:GeneName
-	rownames(outlier_pvalues) <- paste0(raw_data[, "SubjectID"], ":", raw_data[, "GeneName"])
-	# Convert outlier status into binary random variables
-	# `* 1` converts booleans to binary integers, equivalent to `ifelse(condition, 1, 0)`
-	fraction_outliers_binary <- (abs(outlier_pvalues) <= .1) * 1
-	for (dimension_num in 1:number_of_dimensions) {
-		ordered <- sort(abs(outlier_pvalues[,dimension_num]))
-		max_val <- ordered[floor(length(ordered) * pvalue_fraction)]
-		fraction_outliers_binary[, dimension_num] <- (abs(outlier_pvalues[, dimension_num]) <= max_val) * 1
-	}
-  	outliers_binary <- (abs(outlier_pvalues) <= pvalue_threshold) * 1
-	# Convert outlier status into discretized random variables
-	outliers_discrete <- get_discretized_outliers(outlier_pvalues)
+	
 	# Extract integer label vector of group_IDs
 	group_IDs <- raw_data[, "group_ID"]
-	# Extract boolean vector of whether (ind., gene) samples belong to r.v. group
-	group_belonging_bools <- raw_data[, "is_in_group"]
+
+	data_input <- list(feat=as.matrix(feat), outlier_pvalues=as.matrix(outlier_pvalues), outliers_binary=as.matrix(outliers_binary), fraction_outliers_binary=as.matrix(fraction_outliers_binary), outliers_discrete=outliers_discrete, group_IDs=group_IDs)
+
+	# # Get genomic features (first 2 columns are line identifiers and last `number_of_dimensions+1`
+
+	# # p-values of outlier status of a particular sample (rows) for a particular outlier type (columns)
+	# outlier_pvalues <- as.matrix(raw_data[, (ncol(raw_data)-number_of_dimensions-1):(ncol(raw_data)-2)])
+	# # sample name as SubjectID:GeneName
+	# rownames(outlier_pvalues) <- paste0(raw_data[, "SubjectID"], ":", raw_data[, "GeneName"])
+	# # Convert outlier status into binary random variables
+	# # `* 1` converts booleans to binary integers, equivalent to `ifelse(condition, 1, 0)`
+	# fraction_outliers_binary <- (abs(outlier_pvalues) <= .1) * 1
+	# for (dimension_num in 1:number_of_dimensions) {
+	# 	ordered <- sort(abs(outlier_pvalues[,dimension_num]))
+	# 	max_val <- ordered[floor(length(ordered) * pvalue_fraction)]
+	# 	fraction_outliers_binary[, dimension_num] <- (abs(outlier_pvalues[, dimension_num]) <= max_val) * 1
+	# }
+  	# outliers_binary <- (abs(outlier_pvalues) <= pvalue_threshold) * 1
+	# # Convert outlier status into discretized random variables
+	# outliers_discrete <- get_discretized_outliers(outlier_pvalues)
 	# Put all data into compact data structure
-	data_input <- list(feat=as.matrix(feat), outlier_pvalues=as.matrix(outlier_pvalues), outliers_binary=as.matrix(outliers_binary), fraction_outliers_binary=as.matrix(fraction_outliers_binary), outliers_discrete=outliers_discrete, group_IDs=group_IDs, group_belonging_bools=group_belonging_bools)
+	# data_input <- list(feat=as.matrix(feat), outlier_pvalues=as.matrix(outlier_pvalues), outliers_binary=as.matrix(outliers_binary), fraction_outliers_binary=as.matrix(fraction_outliers_binary), outliers_discrete=outliers_discrete, group_IDs=group_IDs, group_belonging_bools=group_belonging_bools)
 	return(data_input)
 }
 
@@ -226,6 +244,21 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
   	return(list(lambda=best_lambda, gam_parameters=gam_parameters))
 }
 
+sum_grouped_discrete_outlier_columns <- function(discrete_outliers, posterior, number_of_dimensions, largest_grp_size, bin_number) {
+	col_sums <- seq(0, number_of_dimensions)
+	for (i in 1:number_of_dimensions) {
+		running_total <- 0
+		for (j in 1:largest_grp_size) {
+			ind_sum <- sum((unlist(lapply(discrete_outliers[, i], extract_int_from_csl, j)) == bin_number) * 
+						    posterior[, i], 
+						   na.rm=TRUE)
+			running_total <- running_total + ind_sum
+		}
+		col_sums[i] <- running_total
+	}
+
+	return(col_sums)
+}
 
 # Compute MAP estimates of the coefficients defined by P(outlier_status | G)
 map_phi_initialization <- function(discrete_outliers, posterior, number_of_dimensions, pseudocounts, num_bins=3) {
@@ -237,15 +270,13 @@ map_phi_initialization <- function(discrete_outliers, posterior, number_of_dimen
 	phi_inlier <- matrix(1, number_of_dimensions, num_bins)
 	# Count number of times we fall into each bin
 	for (bin_number in 1:num_bins) {
-		phi_outlier[,bin_number] <- colSums(((discrete_outliers==bin_number) * posterior),
-							  				na.rm=TRUE)
-		phi_inlier[,bin_number] <- colSums(((discrete_outliers==bin_number) * (1 - posterior)),
-										   na.rm=TRUE)
+		phi_outlier[,bin_number] <- sum_grouped_discrete_outlier_columns(discrete_outliers, posterior, number_of_dimensions, largest_grp_size, bin_number)
+		phi_inlier[,bin_number] <- sum_grouped_discrete_outlier_columns(discrete_outliers, 1-posterior, number_of_dimensions, largest_grp_size, bin_number)
 	}
 	# Incorporate prior information by adding pseudocounts
 	for (dimension_number in 1:number_of_dimensions) {
-		phi_outlier[dimension_number,] = phi_outlier[dimension_number,] + pseudocounts
-		phi_inlier[dimension_number,] = phi_inlier[dimension_number,] + pseudocounts
+		phi_outlier[dimension_number,] <- phi_outlier[dimension_number,] + pseudocounts
+		phi_inlier[dimension_number,] <- phi_inlier[dimension_number,] + pseudocounts
 	}
 	# Normalize
 	phi_outlier <- phi_outlier / rowSums(phi_outlier)
@@ -518,25 +549,27 @@ map_crf <- function(feat, discrete_outliers, model_params) {
 	return(model_params)
 }
 
-# Compute MAP estimates of phi (ie the coefficients defined by P(outlier_status| FR))
+# Compute MAP estimates of phi (i.e. the coefficients defined by P(outlier_status | FR))
 map_phi <- function(discrete_outliers, model_params) {
+	# TODO: Fix this hardcoding of the number of values that each outlier signal
+	# can take on.
 	num_bins = 3
-	# Initialize phi matrices matrices
+	# Initialize phi matrices
 	phi_outlier <- matrix(1,model_params$number_of_dimensions, num_bins)	
 	phi_inlier <- matrix(1,model_params$number_of_dimensions, num_bins)
 	
 	# Count number of times an expression outlier falls into each bin
 	for (bin_number in 1:num_bins) {
 		# when model_params$posterior == 1
-    	phi_outlier[,bin_number] <- colSums(((discrete_outliers==bin_number)*model_params$posterior),na.rm=TRUE)
+    	phi_outlier[, bin_number] <- colSums(((discrete_outliers==bin_number) * model_params$posterior), na.rm=TRUE)
     	# And when model_params$posterior == 0
-    	phi_inlier[,bin_number] <- colSums(((discrete_outliers==bin_number)*(1-model_params$posterior)),na.rm=TRUE)
+    	phi_inlier[, bin_number] <- colSums(((discrete_outliers==bin_number) * (1-model_params$posterior)), na.rm=TRUE)
     }
 
     # Add constant Dirichlet prior to count table
     for (dimension_number in 1:model_params$number_of_dimensions) {
-    	phi_outlier[dimension_number,] = phi_outlier[dimension_number,] + pseudocounts
-    	phi_inlier[dimension_number,] = phi_inlier[dimension_number,] + pseudocounts
+    	phi_outlier[dimension_number,] <- phi_outlier[dimension_number,] + pseudocounts
+    	phi_inlier[dimension_number,] <- phi_inlier[dimension_number,] + pseudocounts
     }
     # Normalize
     phi_outlier <- phi_outlier/rowSums(phi_outlier)
@@ -595,7 +628,7 @@ train_watershed_model <- function(feat, discrete_outliers, phi_init, theta_pair_
 	iter = 1
 	max_iter = 500
 	# Iterate between E and M until convergence
-	while (converged==FALSE) {
+	while (!converged) {
 		cat('########################\n')
 		cat(paste0("ITERATION ", iter, "\n"))
 		##########################
@@ -611,16 +644,16 @@ train_watershed_model <- function(feat, discrete_outliers, phi_init, theta_pair_
 		##########################
 		expected_posteriors <- update_marginal_posterior_probabilities(feat, discrete_outliers, model_params)
 		# Extract marginal posteriors and pairwise posteriors, respectively
-		model_params$posterior = expected_posteriors$probability
-		model_params$posterior_pairwise = expected_posteriors$probability_pairwise
+		model_params$posterior <- expected_posteriors$probability
+		model_params$posterior_pairwise <- expected_posteriors$probability_pairwise
 
 		##########################
 		# E-Step: Infer P(Z | G, theta)
 		##########################
 		expected_conditional_probability <- update_conditional_z_given_g_probabilities(feat, discrete_outliers, model_params)
 		# Extract marginal posteriors and pairwise posteriors, respectively
-		model_params$mu = expected_conditional_probability$probability
-		model_params$mu_pairwise = expected_conditional_probability$probability_pairwise
+		model_params$mu <- expected_conditional_probability$probability
+		model_params$mu_pairwise <- expected_conditional_probability$probability_pairwise
 
 		##########################
 		# M-Step: Update theta and phi given most recent expectations from E-step 
