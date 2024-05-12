@@ -2,15 +2,18 @@ library(lbfgs)
 library(Rcpp)
 library(dplyr)
 sourceCpp("crf_exact_updates.cpp")
-#sourceCpp("crf_variational_updates.cpp")
+#sourceCpp("crf_variational_updates.cpp") # Currently has compilation errors, is only needed for VI
 sourceCpp("independent_crf_exact_updates.cpp")
 sourceCpp("crf_pseudolikelihood_updates.cpp")
-
+sourceCpp("data_manip.cpp")
 
 # Convert outlier status into discretized random variables
 get_discretized_outliers <- function(outlier_pvalues) {
 	# Initialize return value, a matrix of zeros with the same shape as the input
-	outliers_discretized <- matrix(0, dim(outlier_pvalues)[1], dim(outlier_pvalues)[2])
+	outliers_discretized <- matrix(0, nrow(outlier_pvalues), ncol(outlier_pvalues))
+
+	# TODO: check everything below this point in the function
+
 	# Iterate through each outlier signal, each composing a dimension of the model
 	for (dimension in 1:ncol(outlier_pvalues)) {
 		# Check whether the p-values represent "total expression," i.e. if they're
@@ -32,53 +35,53 @@ get_discretized_outliers <- function(outlier_pvalues) {
 	return(outliers_discretized)
 }
 
-
 # Load in and parse Watershed input file
 load_watershed_data <- function(input_file, number_of_dimensions, pvalue_fraction, pvalue_threshold) {
 	raw_data <- read.table(input_file, header=TRUE)
 
+	# Pvalues of outlier status of a particular sample (rows) for a particular outlier type (columns)
+	outlier_pvalues <- as.matrix(raw_data[,(ncol(raw_data)-number_of_dimensions):(ncol(raw_data)-1)])
+	number_of_groups <- length(unique(raw_data$group_ID))
+	number_of_groups <- length(unique(raw_data$group_ID))
+	max_group_size <- max(table(raw_data$group_ID))
+	# From `data_manip.cpp`
+	grouped_outliers <- group_outliers_cpp(raw_data["group_IDs"], outlier_pvalues, number_of_dimensions, number_of_groups, max_group_size)
+	# go_df <- as.data.frame(grouped_outliers, 
+	# 					   col.names=sprintf("pheno_%d_value_%d", seq(1:number_of_dimensions), rep(1:max_group_size, each=number_of_dimensions)))
+	
 	pheno_cols <- (ncol(raw_data)-number_of_dimensions):(ncol(raw_data)-1)
-	raw_data[pheno_cols] <- get_discretized_outliers(raw_data[pheno_cols])
+	rd_grouping <- raw_data %>% group_by(group_ID) # intermediate for the sake of computational efficiency
+	rd_grouped <- left_join(rd_grouping %>% summarize_at(1, paste, collapse="_"), # SubjectID ("_"-concatenated)
+			  			    rd_grouping %>% summarize_at(2, first), by="group_ID") %>% # GeneName
+		left_join(rd_grouping %>% summarize_at(3:(pheno_cols[1]-1), first), by="group_ID") %>% # feat
+		select(-1) # remove `group_ID`
 
-	rd_grouped <- raw_data %>% group_by(group_ID)
+	# Get genomic features (first 2 columns are group/ind. subject identifiers)
+	feat <- rd_grouped %>% select(-1, -2)
+	# sample name as SubjectID:GeneName
+	grouped_row_names <- paste(rd_grouped[,"SubjectID"], ":", rd_grouped[,"GeneName"], sep="")
+	rownames(feat) <- grouped_row_names
 
-	raw_data <- left_join(rd_grouped %>% summarize_at(1, paste, collapse="_"),
-			  rd_grouped %>% summarize_at(2, first), by="group_ID") %>%
-		left_join(rd_grouped %>% summarize_at(3:(pheno_cols[1]-1), first), by="group_ID") %>%
-		left_join(rd_grouped %>% summarize_at(pheno_cols, paste, collapse=","), by="group_ID") %>%
-		select(-1, 1)
-	
-	raw_data <- as.data.frame(raw_data)
+	rownames(grouped_outliers) <- grouped_row_names
 
-	# columns are outlier status and group label)
-	feat <- raw_data[, 3:(ncol(raw_data)-number_of_dimensions-1)]
-	# Put sample names in format "SubjectID:GeneName"
-	rownames(feat) <- paste0(raw_data[,"SubjectID"], ":", raw_data[,"GeneName"])
-	
-	# Extract integer label vector of group_IDs
-	group_IDs <- raw_data[, "group_ID"]
+	# Convert outlier status into binary random variables
+	fraction_outliers_binary <- ifelse(abs(grouped_outliers)<=.1,1,0) # Strictly for initialization of binary output matrix
+	for (dimension_num in 1:ncol(grouped_outliers)) {
+		ordered <- sort(abs(grouped_outliers[,dimension_num]))
+		max_val <- ordered[floor(length(ordered)*pvalue_fraction)]
+		fraction_outliers_binary[,dimension_num] <- ifelse(abs(outlier_pvalues[,dimension_num]) <= max_val,1,0)
+	}
+  	outliers_binary <- ifelse(abs(outlier_pvalues)<=pvalue_threshold, 1, 0)
+	# Convert outlier status into discretized random variables
+	outliers_discrete <- get_discretized_outliers(outlier_pvalues)
+	# Extract array of N2 pairs
 
-	data_input <- list(feat=as.matrix(feat), outlier_pvalues=as.matrix(outlier_pvalues), outliers_binary=as.matrix(outliers_binary), fraction_outliers_binary=as.matrix(fraction_outliers_binary), outliers_discrete=outliers_discrete, group_IDs=group_IDs)
+	# TODO: Fix this for groupings 
+	N2_pairs=factor(raw_data[,"N2pair"], levels=unique(raw_data[,"N2pair"]))
 
-	# # Get genomic features (first 2 columns are line identifiers and last `number_of_dimensions+1`
-
-	# # p-values of outlier status of a particular sample (rows) for a particular outlier type (columns)
-	# outlier_pvalues <- as.matrix(raw_data[, (ncol(raw_data)-number_of_dimensions-1):(ncol(raw_data)-2)])
-	# # sample name as SubjectID:GeneName
-	# rownames(outlier_pvalues) <- paste0(raw_data[, "SubjectID"], ":", raw_data[, "GeneName"])
-	# # Convert outlier status into binary random variables
-	# # `* 1` converts booleans to binary integers, equivalent to `ifelse(condition, 1, 0)`
-	# fraction_outliers_binary <- (abs(outlier_pvalues) <= .1) * 1
-	# for (dimension_num in 1:number_of_dimensions) {
-	# 	ordered <- sort(abs(outlier_pvalues[,dimension_num]))
-	# 	max_val <- ordered[floor(length(ordered) * pvalue_fraction)]
-	# 	fraction_outliers_binary[, dimension_num] <- (abs(outlier_pvalues[, dimension_num]) <= max_val) * 1
-	# }
-  	# outliers_binary <- (abs(outlier_pvalues) <= pvalue_threshold) * 1
-	# # Convert outlier status into discretized random variables
-	# outliers_discrete <- get_discretized_outliers(outlier_pvalues)
 	# Put all data into compact data structure
-	# data_input <- list(feat=as.matrix(feat), outlier_pvalues=as.matrix(outlier_pvalues), outliers_binary=as.matrix(outliers_binary), fraction_outliers_binary=as.matrix(fraction_outliers_binary), outliers_discrete=outliers_discrete, group_IDs=group_IDs, group_belonging_bools=group_belonging_bools)
+	data_input <- list(feat=as.matrix(feat), outlier_pvalues=as.matrix(outlier_pvalues), outliers_binary=as.matrix(outliers_binary), fraction_outliers_binary=as.matrix(fraction_outliers_binary), outliers_discrete=outliers_discrete, N2_pairs=N2_pairs)
+	
 	return(data_input)
 }
 
@@ -244,22 +247,6 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
   	return(list(lambda=best_lambda, gam_parameters=gam_parameters))
 }
 
-sum_grouped_discrete_outlier_columns <- function(discrete_outliers, posterior, number_of_dimensions, largest_grp_size, bin_number) {
-	col_sums <- seq(0, number_of_dimensions)
-	for (i in 1:number_of_dimensions) {
-		running_total <- 0
-		for (j in 1:largest_grp_size) {
-			ind_sum <- sum((unlist(lapply(discrete_outliers[, i], extract_int_from_csl, j)) == bin_number) * 
-						    posterior[, i], 
-						   na.rm=TRUE)
-			running_total <- running_total + ind_sum
-		}
-		col_sums[i] <- running_total
-	}
-
-	return(col_sums)
-}
-
 # Compute MAP estimates of the coefficients defined by P(outlier_status | G)
 map_phi_initialization <- function(discrete_outliers, posterior, number_of_dimensions, pseudocounts, num_bins=3) {
 	# `num_bins` is the number of bins supported by the categorical distributions
@@ -270,6 +257,7 @@ map_phi_initialization <- function(discrete_outliers, posterior, number_of_dimen
 	phi_inlier <- matrix(1, number_of_dimensions, num_bins)
 	# Count number of times we fall into each bin
 	for (bin_number in 1:num_bins) {
+		for ()
 		phi_outlier[,bin_number] <- sum_grouped_discrete_outlier_columns(discrete_outliers, posterior, number_of_dimensions, largest_grp_size, bin_number)
 		phi_inlier[,bin_number] <- sum_grouped_discrete_outlier_columns(discrete_outliers, 1-posterior, number_of_dimensions, largest_grp_size, bin_number)
 	}

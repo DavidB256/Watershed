@@ -22,9 +22,9 @@ double variational_update(int sample_num, int dimension, NumericMatrix feat, Str
 		for (int dimension2=dimension1; dimension2 < number_of_dimensions; dimension2++) {
 			if (dimension1 != dimension2) {
 				if (dimension1 == dimension) {
-					term_a += theta_pair(0, dimension_counter)*probabilities(sample_num, dimension2);
+					term_a += theta_pair(0, dimension_counter) * probabilities(sample_num, dimension2);
 				} else if (dimension2 == dimension) {
-					term_a += theta_pair(0, dimension_counter)*probabilities(sample_num, dimension1);
+					term_a += theta_pair(0, dimension_counter) * probabilities(sample_num, dimension1);
 				}
 				dimension_counter += 1;
 			}
@@ -35,11 +35,10 @@ double variational_update(int sample_num, int dimension, NumericMatrix feat, Str
 		term_a += feat(sample_num, d)*theta(d, dimension);
 	}
 	// Check to see if we are supposed to incorperate expression data && whether the expression data is observed
-	if (posterior_bool == true && discrete_outliers(sample_num, dimension) == discrete_outliers(sample_num, dimension)) {
-		for (int ind = 0; ind < discrete_outliers(sample_num, dimension).size(); ind += 2) {
-			int discrete_outlier = discrete_outliers(sample_num, dimension)[ind] - '0';
-			term_a += log(phi_outlier(dimension, discrete_outlier - 1));
-			term_b += log(phi_inlier(dimension, discrete_outlier - 1));
+	if (posterior_bool && discrete_outliers(sample_num, dimension) == discrete_outliers(sample_num, dimension)) {
+		for (int dimension_repeat = dimension; dimension_repeat < discrete_outliers.ncol(); dimension_repeat += number_of_dimensions) {
+			term_a += log(phi_outlier(dimension, discrete_outliers(sample_num, dimension_repeat) - 1));
+			term_b += log(phi_inlier(dimension, discrete_outliers(sample_num, dimension_repeat) - 1));
 		}
 	}
 	// Normalize the terms to get a probability

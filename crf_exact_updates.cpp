@@ -8,7 +8,6 @@
 #include <Rcpp.h>
 using namespace Rcpp;
 
-
 // Create matrix of dimension 2^(number_of_dimensions) x number_of_dimensions
 // Each row of this matrix summarizes all possible binary values that CRF can take on
 // [[Rcpp::export]]
@@ -123,15 +122,11 @@ double un_normalized_crf_weight(NumericMatrix all_binary_combinations_matrix, in
 		// I(E)log(p(E | Z))
 		if (posterior_bool && discrete_outliers(sample_num, dimension) == discrete_outliers(sample_num, dimension)) {
 			if (all_binary_combinations_matrix(combination_number, dimension)) {
-				for (int ind = 0; ind < discrete_outliers(sample_num, dimension).size(); ind += 2) {
-					int discrete_outlier = discrete_outliers(sample_num, dimension)[ind] - '0';
-					weight += log(phi_outlier(dimension, discrete_outlier - 1));
-				}
+				for (int dimension_repeat = dimension; dimension_repeat < discrete_outliers.ncol(); dimension_repeat += number_of_dimensions)
+					weight += log(phi_outlier(dimension, discrete_outliers(sample_num, dimension_repeat) - 1));
 			} else {
-				for (int ind = 0; ind < discrete_outliers(sample_num, dimension).size(); ind += 2) {
-					int discrete_outlier = discrete_outliers(sample_num, dimension)[ind] - '0';
-					weight += log(phi_inlier(dimension, discrete_outlier - 1));
-				}
+				for (int dimension_repeat = dimension; dimension_repeat < discrete_outliers.ncol(); dimension_repeat += number_of_dimensions)
+					weight += log(phi_inlier(dimension, discrete_outliers(sample_num, dimension_repeat) - 1));
 			}
 		}
 	}

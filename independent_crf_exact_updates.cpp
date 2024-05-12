@@ -25,16 +25,12 @@ double un_normalized_independent_crf_weight(int dimension, int combination_numbe
 	if (posterior_bool && discrete_outliers(sample_num, dimension) == discrete_outliers(sample_num, dimension)) {
 		// Z == 1
 		if (combination_number == 1) {
-			for (int ind = 0; ind < discrete_outliers(sample_num, dimension).size(); ind += 2) {
-				int discrete_outlier = discrete_outliers(sample_num, dimension)[ind] - '0';
-				weight += log(phi_outlier(dimension, discrete_outlier - 1));
-			}
+			for (int dimension_repeat = dimension; dimension_repeat < discrete_outliers.ncol(); dimension_repeat += number_of_dimensions)
+				weight += log(phi_outlier(dimension, discrete_outliers(sample_num, dimension_repeat) - 1));
 		// Z == 0
-		} else if (combination_number == 0) {
-			for (int ind = 0; ind < discrete_outliers(sample_num, dimension).size(); ind += 2) {
-				int discrete_outlier = discrete_outliers(sample_num, dimension)[ind] - '0';
-				weight += log(phi_inlier(dimension, discrete_outlier - 1));
-			}
+		} else {
+			for (int dimension_repeat = dimension; dimension_repeat < discrete_outliers.ncol(); dimension_repeat += number_of_dimensions)
+				weight += log(phi_inlier(dimension, discrete_outliers(sample_num, dimension_repeat) - 1));
 		}
 	}
 
