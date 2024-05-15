@@ -23,14 +23,22 @@ compute_auc_across_dimensions <- function(number_of_dimensions, watershed_poster
   		test_outlier_status <- binary_outliers_test2[,dimension]
 
 		# Watershed evaluation curves
-  		watershed_roc_obj <- roc.curve(scores.class0 = remove_na(watershed_posteriors[,dimension][test_outlier_status==1 & !is.na(real_valued_outliers_test1[,dimension])]), scores.class1 = remove_na(watershed_posteriors[,dimension][test_outlier_status==0 & !is.na(real_valued_outliers_test1[,dimension])]), curve = T)
-  		watershed_pr_obj <- pr.curve(scores.class0 = remove_na(watershed_posteriors[,dimension][test_outlier_status==1 & !is.na(real_valued_outliers_test1[,dimension])]), scores.class1 = remove_na(watershed_posteriors[,dimension][test_outlier_status==0 & !is.na(real_valued_outliers_test1[,dimension])]), curve = T)
+  		watershed_roc_obj <- roc.curve(scores.class0=remove_na(watershed_posteriors[,dimension][test_outlier_status==1 & !is.na(real_valued_outliers_test1[,dimension])]), 
+									   scores.class1=remove_na(watershed_posteriors[,dimension][test_outlier_status==0 & !is.na(real_valued_outliers_test1[,dimension])]), 
+									   curve = T)
+  		watershed_pr_obj <- pr.curve(scores.class0=remove_na(watershed_posteriors[,dimension][test_outlier_status==1 & !is.na(real_valued_outliers_test1[,dimension])]), 
+									 scores.class1=remove_na(watershed_posteriors[,dimension][test_outlier_status==0 & !is.na(real_valued_outliers_test1[,dimension])]), 
+									 curve=T)
   	
   		# GAM evaluation curves
-  		gam_roc_obj <- roc.curve(scores.class0 = remove_na(gam_posteriors[,dimension][test_outlier_status==1 & !is.na(real_valued_outliers_test1[,dimension])]), scores.class1 = remove_na(gam_posteriors[,dimension][test_outlier_status==0 & !is.na(real_valued_outliers_test1[,dimension])]), curve = T)
-   		gam_pr_obj <- pr.curve(scores.class0 = remove_na(gam_posteriors[,dimension][test_outlier_status==1 & !is.na(real_valued_outliers_test1[,dimension])]), scores.class1 = remove_na(gam_posteriors[,dimension][test_outlier_status==0 & !is.na(real_valued_outliers_test1[,dimension])]), curve = T)
+  		gam_roc_obj <- roc.curve(scores.class0=remove_na(gam_posteriors[,dimension][test_outlier_status==1 & !is.na(real_valued_outliers_test1[,dimension])]), 
+								 scores.class1=remove_na(gam_posteriors[,dimension][test_outlier_status==0 & !is.na(real_valued_outliers_test1[,dimension])]), 
+								 curve=T)
+   		gam_pr_obj <- pr.curve(scores.class0=remove_na(gam_posteriors[,dimension][test_outlier_status==1 & !is.na(real_valued_outliers_test1[,dimension])]), 
+							   scores.class1=remove_na(gam_posteriors[,dimension][test_outlier_status==0 & !is.na(real_valued_outliers_test1[,dimension])]), 
+							   curve=T)
 
-		evaROC <-	
+		evaROC <-
 		 list(watershed_sens=watershed_roc_obj$curve[,2],
               watershed_spec=1-watershed_roc_obj$curve[,1],
          	  watershed_auc=watershed_roc_obj$auc,
@@ -50,12 +58,10 @@ compute_auc_across_dimensions <- function(number_of_dimensions, watershed_poster
 	return(auc_object_across_dimensions)
 }
 
-
-
 #######################################
 ## Train model on non-N2 pairs and evaluate model on N2-pairs
 #######################################
-evaluate_watershed_shell <- function(input_file, number_of_dimensions, model_name, pseudoc, lambda_init, output_stem, n2_pair_pvalue_fraction, binary_pvalue_threshold, lambda_costs, nfolds, vi_step_size, vi_threshold) {
+evaluate_watershed_shell <- function(input_file, number_of_dimensions, model_name, pseudocounts, lambda_init, output_stem, n2_pair_pvalue_fraction, binary_pvalue_threshold, lambda_costs, nfolds, vi_step_size, vi_threshold) {
 	########################
 	## Load in data
 	########################
@@ -65,7 +71,13 @@ evaluate_watershed_shell <- function(input_file, number_of_dimensions, model_nam
 	discrete_outliers_all <- data_input$outliers_discrete
 	binary_outliers_all <- data_input$outliers_binary
 	fraction_binary_outliers_all <- data_input$fraction_outliers_binary
-	N2_pairs <- data_input$N2_pairs
+	groupings <- data_input$groupings
+
+	non_single_groupings <- groupings[!is.na(groupings)]
+	half_ns_groupings <- unique(non_single_groupings)[1:length(unique(non_single_groupings))/2]
+	groupings_for_testing <- groupings[which(groupings %in% half_ns_groupings)]
+
+	training_indices <- groupings[which(!groupings %in% groupings_for_testing)]
 
 	## Extract training data (ie. non-N2-pairs)
 	feat_train <- feat_all[is.na(N2_pairs),]
@@ -76,22 +88,36 @@ evaluate_watershed_shell <- function(input_file, number_of_dimensions, model_nam
 	#(has to be done seperately for RIVER vs Watershed)
 	if (number_of_dimensions == 1) {
 		# Extraction of test data for RIVER
-		feat_test <- rbind(feat_all[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),], feat_all[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),])
-  		discrete_outliers_test1 <- as.matrix(c(discrete_outliers_all[!is.na(N2_pairs)][seq(from=1,to=sum(!is.na(N2_pairs)),by=2)], discrete_outliers_all[!is.na(N2_pairs)][seq(from=2,to=sum(!is.na(N2_pairs)),by=2)]))
-  		discrete_outliers_test2 <- as.matrix(c(discrete_outliers_all[!is.na(N2_pairs)][seq(from=2,to=sum(!is.na(N2_pairs)),by=2)], discrete_outliers_all[!is.na(N2_pairs)][seq(from=1,to=sum(!is.na(N2_pairs)),by=2)]))
-		binary_outliers_test1 <- as.matrix(c(binary_outliers_all[!is.na(N2_pairs)][seq(from=1,to=sum(!is.na(N2_pairs)),by=2)], binary_outliers_all[!is.na(N2_pairs)][seq(from=2,to=sum(!is.na(N2_pairs)),by=2)]))
-  		binary_outliers_test2 <- as.matrix(c(fraction_binary_outliers_all[!is.na(N2_pairs)][seq(from=2,to=sum(!is.na(N2_pairs)),by=2)], fraction_binary_outliers_all[!is.na(N2_pairs)][seq(from=1,to=sum(!is.na(N2_pairs)),by=2)]))
+		feat_test <- rbind(feat_all[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),], 
+						   feat_all[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),])
+  		discrete_outliers_test1 <- as.matrix(c(discrete_outliers_all[!is.na(N2_pairs)][seq(from=1,to=sum(!is.na(N2_pairs)),by=2)], 
+											   discrete_outliers_all[!is.na(N2_pairs)][seq(from=2,to=sum(!is.na(N2_pairs)),by=2)]))
+  		discrete_outliers_test2 <- as.matrix(c(discrete_outliers_all[!is.na(N2_pairs)][seq(from=2,to=sum(!is.na(N2_pairs)),by=2)], 
+											   discrete_outliers_all[!is.na(N2_pairs)][seq(from=1,to=sum(!is.na(N2_pairs)),by=2)]))
+		binary_outliers_test1 <- as.matrix(c(binary_outliers_all[!is.na(N2_pairs)][seq(from=1,to=sum(!is.na(N2_pairs)),by=2)], 
+											 binary_outliers_all[!is.na(N2_pairs)][seq(from=2,to=sum(!is.na(N2_pairs)),by=2)]))
+  		binary_outliers_test2 <- as.matrix(c(fraction_binary_outliers_all[!is.na(N2_pairs)][seq(from=2,to=sum(!is.na(N2_pairs)),by=2)], 
+											 fraction_binary_outliers_all[!is.na(N2_pairs)][seq(from=1,to=sum(!is.na(N2_pairs)),by=2)]))
 		# Absolute pvalues from test prediction data set (to be used for RNA-only analysis)
-  		real_valued_outliers_test1 <- -log10(abs(as.matrix(c(data_input$outlier_pvalues[!is.na(N2_pairs)][seq(from=1,to=sum(!is.na(N2_pairs)),by=2)], data_input$outlier_pvalues[!is.na(N2_pairs)][seq(from=2,to=sum(!is.na(N2_pairs)),by=2)]))) + 1e-7)
+  		real_valued_outliers_test1 <- -log10(abs(as.matrix(c(data_input$outlier_pvalues[!is.na(N2_pairs)][seq(from=1,to=sum(!is.na(N2_pairs)),by=2)], 
+														     data_input$outlier_pvalues[!is.na(N2_pairs)][seq(from=2,to=sum(!is.na(N2_pairs)),by=2)]))) + 
+											 1e-7)
 	} else {
 		# Extraction of test data for Watershed
-  		feat_test <- rbind(feat_all[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),], feat_all[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),])
-  		discrete_outliers_test1 <- rbind(discrete_outliers_all[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),], discrete_outliers_all[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),])
-  		discrete_outliers_test2 <- rbind(discrete_outliers_all[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),], discrete_outliers_all[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),])
-  		binary_outliers_test1 <- rbind(binary_outliers_all[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),], binary_outliers_all[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),])
-  		binary_outliers_test2 <- rbind(fraction_binary_outliers_all[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),], fraction_binary_outliers_all[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),])
+  		feat_test <- rbind(feat_all[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),], 
+						   feat_all[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),])
+  		discrete_outliers_test1 <- rbind(discrete_outliers_all[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),], 
+										 discrete_outliers_all[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),])
+  		discrete_outliers_test2 <- rbind(discrete_outliers_all[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),], 
+										 discrete_outliers_all[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),])
+  		binary_outliers_test1 <- rbind(binary_outliers_all[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),], 
+									   binary_outliers_all[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),])
+  		binary_outliers_test2 <- rbind(fraction_binary_outliers_all[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),], 
+									   fraction_binary_outliers_all[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),])
   		# Absolute pvalues from test prediction data set (to be used for RNA-only analysis)
-  		real_valued_outliers_test1 <- -log10(abs(rbind(data_input$outlier_pvalues[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),], data_input$outlier_pvalues[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),])) + 1e-7)
+  		real_valued_outliers_test1 <- -log10(abs(rbind(data_input$outlier_pvalues[!is.na(N2_pairs),][seq(from=1,to=sum(!is.na(N2_pairs)),by=2),], 
+												 data_input$outlier_pvalues[!is.na(N2_pairs),][seq(from=2,to=sum(!is.na(N2_pairs)),by=2),])) + 
+										     1e-7)
   	}
 
 	#######################################
@@ -111,7 +137,7 @@ evaluate_watershed_shell <- function(input_file, number_of_dimensions, model_nam
 	if (is.na(lambda_init)) {
 		cat(paste0(nfolds,"-fold cross validation on GAM yielded optimal lambda of ", gam_data$lambda, "\n"))
 	}
-	# Compute GAM Predictions on test data in CPP file ("independent_crf_exact_updates.cpp")
+	# Compute GAM predictions on test data with function in `independent_crf_exact_updates.cpp`
 	gam_posterior_test_obj <- update_independent_marginal_probabilities_exact_inference_cpp(feat_test, binary_outliers_test1, gam_data$gam_parameters$theta_singleton, gam_data$gam_parameters$theta_pair, gam_data$gam_parameters$theta, matrix(0,2,2), matrix(0,2,2), number_of_dimensions, choose(number_of_dimensions, 2), FALSE)
 	gam_test_posteriors <- gam_posterior_test_obj$probability
 
@@ -123,17 +149,17 @@ evaluate_watershed_shell <- function(input_file, number_of_dimensions, model_nam
 	gam_train_posteriors <- gam_posterior_train_obj$probability
 	# Initialize Phi using GAM posteriors
 	# ie. Compute MAP estimates of the coefficients defined by P(outlier_status| FR)
-	phi_init <- map_phi_initialization(discrete_outliers_train, gam_train_posteriors, number_of_dimensions, pseudoc)
+	phi_init <- map_phi_initialization(discrete_outliers_train, gam_train_posteriors, number_of_dimensions, pseudocounts)
 
 	#######################################
 	### Fit Watershed Model
 	#######################################
-	watershed_model <- train_watershed_model(feat_train, discrete_outliers_train, phi_init, gam_data$gam_parameters$theta_pair, gam_data$gam_parameters$theta_singleton, gam_data$gam_parameters$theta, pseudoc, gam_data$lambda, number_of_dimensions, model_name, vi_step_size, vi_threshold)
+	watershed_model <- train_watershed_model(feat_train, discrete_outliers_train, phi_init, gam_data$gam_parameters$theta_pair, gam_data$gam_parameters$theta_singleton, gam_data$gam_parameters$theta, pseudocounts, gam_data$lambda, number_of_dimensions, model_name, vi_step_size, vi_threshold)
 
 	#######################################
 	## Compute Watershed Posterior probabilities for held-out test data (ie the N2 pairs)
 	#######################################
-	posterior_info_test <- update_marginal_posterior_probabilities(feat_test, discrete_outliers_test1, watershed_model)
+	posterior_info_test <- update_marginal_posterior_probabilities(feat_test, discrete_outliers_test1, watershed_model, posterior_bool=TRUE)
 	posterior_prob_test <- posterior_info_test$probability  # Marginal posteriors
 	posterior_pairwise_prob_test <- posterior_info_test$probability_pairwise  # Pairwise posteriors
 
@@ -161,11 +187,12 @@ arguments <- parse_args(OptionParser(usage = "%prog [options]", description="Wat
 		make_option(c("-n","--n2_pair_pvalue_fraction"), default=.1, help="Fraction of outliers (based on rank) that are considered an outlier for N2 pair analysis (this is done so each outlier type/signal has approximately the same distribution of positive outlier examples)"),
 		make_option(c("-b","--binary_pvalue_threshold"), default=.1, help="Absolute p-value threshold used to create binary outliers used for Genomic Annotation Model"))
 ))
+
 # process command line args
 input_file <- arguments$input
 number_of_dimensions <- arguments$number_dimensions
 model_name <- arguments$model_name
-pseudoc <- arguments$dirichlet_prior_parameter
+pseudocounts <- arguments$dirichlet_prior_parameter
 lambda_init <- arguments$l2_prior_parameter
 if (lambda_init == "NA") {
 	lambda_init <- NA
@@ -197,7 +224,7 @@ set.seed(1)
 #######################################
 ## Train model on non-N2 pairs and evaluate model on N2-pairs
 #######################################
-evaluation_object <- evaluate_watershed_shell(input_file, number_of_dimensions, model_name, pseudoc, lambda_init, output_stem, n2_pair_pvalue_fraction, binary_pvalue_threshold, lambda_costs, nfolds, vi_step_size, vi_threshold)
+evaluation_object <- evaluate_watershed_shell(input_file, number_of_dimensions, model_name, pseudocounts, lambda_init, output_stem, n2_pair_pvalue_fraction, binary_pvalue_threshold, lambda_costs, nfolds, vi_step_size, vi_threshold)
 
 
 #######################################

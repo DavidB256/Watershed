@@ -9,7 +9,7 @@
 using namespace Rcpp;
 
 // Update variational probability according to coordinate descent updates for one (sample, dimension) pair
-double variational_update(int sample_num, int dimension, NumericMatrix feat, StringMatrix discrete_outliers, NumericMatrix probabilities, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, bool posterior_bool) {
+double variational_update(int sample_num, int dimension, NumericMatrix feat, NumericMatrix discrete_outliers, NumericMatrix probabilities, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, bool posterior_bool) {
 	// Iniitialize term_a and term_b
 	// term_b corresponds to the un-normalized weight of the mean field approximation to the current dimension assuming it takes on a value of 0
 	// term_a corresponds to the un-normalized weight of the mean field approximation to the current dimension assuming it takes on a value of 1
@@ -37,8 +37,11 @@ double variational_update(int sample_num, int dimension, NumericMatrix feat, Str
 	// Check to see if we are supposed to incorperate expression data && whether the expression data is observed
 	if (posterior_bool && discrete_outliers(sample_num, dimension) == discrete_outliers(sample_num, dimension)) {
 		for (int dimension_repeat = dimension; dimension_repeat < discrete_outliers.ncol(); dimension_repeat += number_of_dimensions) {
-			term_a += log(phi_outlier(dimension, discrete_outliers(sample_num, dimension_repeat) - 1));
-			term_b += log(phi_inlier(dimension, discrete_outliers(sample_num, dimension_repeat) - 1));
+			int discrete_outlier = discrete_outliers(sample_num, dimension_repeat);
+			if (discrete_outlier != 0) {
+				term_a += log(phi_outlier(dimension, discrete_outlier - 1));
+				term_b += log(phi_inlier(dimension, discrete_outlier - 1));
+			}
 		}
 	}
 	// Normalize the terms to get a probability
@@ -47,7 +50,7 @@ double variational_update(int sample_num, int dimension, NumericMatrix feat, Str
 }
 
 // Use Mean Field Variational inference to infer posterior probabilities according to Conditional Random Field for this sample
-NumericMatrix variational_optimization(NumericMatrix probabilities, int sample_num, NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, bool posterior_bool, double step_size, double convergence_thresh, std::mt19937 g) {
+NumericMatrix variational_optimization(NumericMatrix probabilities, int sample_num, NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, bool posterior_bool, double step_size, double convergence_thresh, std::mt19937 g) {
 	// Initialize temporary variables
 	double diff_prob = 0;  // Keeps track of average absolute difference in mean field estimates between this iteration and the previous iteration
 	int iteration_counter = 0; // Keeps track of the number of iterations
@@ -96,7 +99,7 @@ NumericMatrix variational_optimization(NumericMatrix probabilities, int sample_n
 // If posterior_bool==true, compute P(Z|E,G)
 // If posterior_bool==false, compute P(Z|G)
 // [[Rcpp::export]]
-List update_marginal_probabilities_vi_cpp(NumericMatrix feat, StringMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int number_of_pairs, double step_size, double convergence_thresh, NumericMatrix probability_init, bool posterior_bool) {
+List update_marginal_probabilities_vi_cpp(NumericMatrix feat, NumericMatrix discrete_outliers, NumericVector theta_singleton, NumericMatrix theta_pair, NumericMatrix theta, NumericMatrix phi_inlier, NumericMatrix phi_outlier, int number_of_dimensions, int number_of_pairs, double step_size, double convergence_thresh, NumericMatrix probability_init, bool posterior_bool) {
 	// Initialize random number generator
 	std::random_device rd;
     std::mt19937 g(rd());

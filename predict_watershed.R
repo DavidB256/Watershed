@@ -9,22 +9,25 @@ learn_watershed_model_parameters_from_training_data <- function(training_input_f
 	## Load in data
 	########################
 	data_input <- load_watershed_data(training_input_file, number_of_dimensions, .01, binary_pvalue_threshold)
-	# Parse data_input for relevent data
-	feat_all <- data_input$feat
-	discrete_outliers_all <- data_input$outliers_discrete
-	binary_outliers_all <- data_input$outliers_binary
 
 	#######################################
 	## Standardize Genomic Annotations (features)
 	#######################################
-	mean_feat <- apply(feat_all, 2, mean)
-	sd_feat <- apply(feat_all, 2, sd)
- 	feat_all <- scale(feat_all, center=mean_feat, scale=sd_feat)
+	mean_feat <- apply(data_input$ungrouped_feat, 2, mean)
+	sd_feat <- apply(data_input$ungrouped_feat, 2, sd)
+ 	ungrouped_feat_normalized <- scale(data_input$ungrouped_feat, center=mean_feat, scale=sd_feat)
+
+	mean_feat <- apply(data_input$grouped_feat, 2, mean)
+	sd_feat <- apply(data_input$grouped_feat, 2, sd)
+ 	grouped_feat_normalized <- scale(data_input$grouped_feat, center=mean_feat, scale=sd_feat)
+
+	cat(paste0("Dimensions of ungrouped_feat_normalized: ", dim(ungrouped_feat_normalized), "\n"))
+	cat(paste0("Dimensions of ungrouped_outliers_binary: ", dim(data_input$ungrouped_outliers_binary), "\n"))
 
   	#######################################
 	## Fit Genomic Annotation Model (GAM)
 	#######################################
-	gam_data <- logistic_regression_genomic_annotation_model_cv(feat_all, binary_outliers_all, nfolds, lambda_costs, lambda_init)
+	gam_data <- logistic_regression_genomic_annotation_model_cv(ungrouped_feat_normalized, data_input$ungrouped_outliers_binary, number_of_dimensions, nfolds, lambda_costs, lambda_init)
 	# Report optimal lambda learned from cross-validation data (if applicable)
 	if (is.na(lambda_init)) {
 		cat(paste0(nfolds, "-fold cross validation on GAM yielded optimal lambda of ", gam_data$lambda, "\n"))
@@ -33,17 +36,19 @@ learn_watershed_model_parameters_from_training_data <- function(training_input_f
 	#######################################
 	### Initialize phi using alpha and beta from GAM
 	#######################################
-	# Compute GAM Predictions on data via function in  CPP file ("independent_crf_exact_updates.cpp")
-	gam_posterior_obj <- update_independent_marginal_probabilities_exact_inference_cpp(feat_all, binary_outliers_all, gam_data$gam_parameters$theta_singleton, gam_data$gam_parameters$theta_pair, gam_data$gam_parameters$theta, matrix(0,2,2), matrix(0,2,2), number_of_dimensions, choose(number_of_dimensions, 2), FALSE)
+	# Compute GAM Predictions on data via function in `crf_exact_updates.cpp`
+	# TODO: What is going on in the latter arguments to this function?
+	gam_posterior_obj <- update_marginal_probabilities_exact_inference_cpp(ungrouped_feat_normalized, data_input$ungrouped_outliers_binary, gam_data$gam_parameters$theta_singleton, gam_data$gam_parameters$theta_pair, gam_data$gam_parameters$theta, 
+																		   matrix(0,2,2), matrix(0,2,2), number_of_dimensions, get_number_of_edge_pairs(number_of_dimensions), FALSE)
 	gam_posteriors <- gam_posterior_obj$probability
 	# Initialize phi using GAM posteriors, i.e. compute MAP estimates of the 
 	# coefficients defined by P(outlier_status| FR)
-	phi_init <- map_phi_initialization(discrete_outliers_all, gam_posteriors, number_of_dimensions, pseudocounts)
+	phi_init <- map_phi_initialization(data_input$ungrouped_outliers_discrete, gam_posteriors, number_of_dimensions, pseudocounts)
 
 	#######################################
 	### Fit Watershed Model
 	#######################################
-	watershed_model <- train_watershed_model(feat_all, discrete_outliers_all, phi_init, gam_data$gam_parameters$theta_pair, gam_data$gam_parameters$theta_singleton, gam_data$gam_parameters$theta, pseudocounts, gam_data$lambda, number_of_dimensions, model_name, vi_step_size, vi_threshold)
+	watershed_model <- train_watershed_model(grouped_feat_normalized, data_input$grouped_outliers_discrete, phi_init, gam_data$gam_parameters$theta_pair, gam_data$gam_parameters$theta_singleton, gam_data$gam_parameters$theta, pseudocounts, gam_data$lambda, number_of_dimensions, model_name, vi_step_size, vi_threshold)
 
 	return(list(mean_feat=mean_feat, sd_feat=sd_feat, model_params=watershed_model, gam_model_params=gam_data))
 }
@@ -62,7 +67,7 @@ predict_watershed_posteriors <- function(watershed_object, prediction_input_file
 	########################
 	## Inference to compute Watershed posterior probabilities
 	########################
-	watershed_info <- update_marginal_posterior_probabilities(predictions_feat, predictions_discretized_outliers, watershed_object$model_params)
+	watershed_info <- update_marginal_posterior_probabilities(predictions_feat, predictions_discretized_outliers, watershed_object$model_params, posterior_bool=TRUE)
 	watershed_posteriors <- watershed_info$probability  # Marginal posteriors
 
 	########################
@@ -88,6 +93,7 @@ arguments <- parse_args(OptionParser(usage = "%prog [options]", description="Wat
 		make_option(c("-o","--output_prefix"), default="watershed", help="Prefix of file name to save results to"),
 		make_option(c("-b","--binary_pvalue_threshold"), default=.1, help="Absolute p-value threshold used to create binary outliers used for Genomic Annotation Model"))
 ))
+
 # process command line args
 training_input_file <- arguments$training_input
 prediction_input_file <- arguments$prediction_input
