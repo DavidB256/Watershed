@@ -11,9 +11,17 @@ sourceCpp("data_manip.cpp")
 load_watershed_data <- function(input_file, number_of_dimensions, pvalue_fraction, pvalue_threshold) {
 	raw_data <- read.table(input_file, header=TRUE)
 
+	# Normalize feature (G) space
+	feat_cols <- 3:(ncol(raw_data)-number_of_dimensions-1)
+	mean_feat <- apply(raw_data[,feat_cols], 2, mean)
+	sd_feat <- apply(raw_data[,feat_cols], 2, sd)
+	raw_data[,feat_cols] <- scale(raw_data[,feat_cols], center=mean_feat, scale=sd_feat)
+
+	pheno_cols <- (ncol(raw_data)-number_of_dimensions):(ncol(raw_data)-1)
+
 	# Pvalues of outlier status of a particular sample (rows) for a particular outlier type (columns)
-	ungrouped_feat <- as.matrix(raw_data[,3:(ncol(raw_data)-number_of_dimensions-1)])
-	ungrouped_outlier_pvalues <- as.matrix(raw_data[,(ncol(raw_data)-number_of_dimensions):(ncol(raw_data)-1)])
+	ungrouped_feat <- as.matrix(raw_data[,feat_cols])
+	ungrouped_outlier_pvalues <- as.matrix(raw_data[,pheno_cols])
 	number_of_groups <- length(unique(raw_data$group_ID))
 	group_sizes <- table(raw_data$group_ID)
 	max_group_size <- max(group_sizes)
@@ -21,24 +29,26 @@ load_watershed_data <- function(input_file, number_of_dimensions, pvalue_fractio
 	grouped_outlier_pvalues <- group_outliers_cpp(raw_data[, "group_ID"], ungrouped_outlier_pvalues, number_of_dimensions, number_of_groups, max_group_size)
 	grouped_outlier_pvalues <- as.matrix(grouped_outlier_pvalues)
 
-	pheno_cols <- (ncol(raw_data)-number_of_dimensions):(ncol(raw_data)-1)
 	rd_grouping <- raw_data %>% group_by(group_ID) # intermediate for the sake of computational efficiency
 	rd_grouped <- left_join(rd_grouping %>% summarize_at(1, paste, collapse="_"), # SubjectID ("_"-concatenated)
 			  			    rd_grouping %>% summarize_at(2, first), by="group_ID") %>% # GeneName
 		left_join(rd_grouping %>% summarize_at(3:(pheno_cols[1]-1), first), by="group_ID") %>% # feat
-		select(-1) # remove `group_ID`
+		select(-1) # remove `group_ID` 
+	grouped_groupings <- rd_grouping %>% summarize %>% pull(1) %>% as.vector()
+	
 
 	# Get genomic features (first 2 columns are group/ind. subject identifiers)
 	grouped_feat <- as.matrix(rd_grouped %>% select(-1, -2))
 	# sample name as SubjectID:GeneName
 
+	# TODO: This should probably be removed
 	# Convert outlier status into binary random variables
-	grouped_fraction_outliers_binary <- ifelse(abs(grouped_outlier_pvalues)<=.1,1,0) # Strictly for initialization of binary output matrix
-	for (dimension_num in 1:ncol(grouped_outlier_pvalues)) {
-		ordered <- sort(abs(grouped_outlier_pvalues[,dimension_num]))
-		max_val <- ordered[floor(length(ordered)*pvalue_fraction)]
-		grouped_fraction_outliers_binary[,dimension_num] <- ifelse(abs(grouped_outlier_pvalues[,dimension_num]) <= max_val,1,0)
-	}
+	# grouped_fraction_outliers_binary <- ifelse(abs(grouped_outlier_pvalues)<=.1, 1, 0) # Strictly for initialization of binary output matrix
+	# for (dimension_num in 1:ncol(grouped_outlier_pvalues)) {
+	# 	ordered <- sort(abs(grouped_outlier_pvalues[,dimension_num]))
+	# 	max_val <- ordered[floor(length(ordered)*pvalue_fraction)]
+	# 	grouped_fraction_outliers_binary[,dimension_num] <- ifelse(abs(grouped_outlier_pvalues[,dimension_num]) <= max_val,1,0)
+	# }
 
   	grouped_outliers_binary <- as.matrix(ifelse(abs(grouped_outlier_pvalues)<=pvalue_threshold, 1, 0))
 	ungrouped_outliers_binary <- as.matrix(ifelse(abs(ungrouped_outlier_pvalues)<=pvalue_threshold, 1, 0))
@@ -57,8 +67,7 @@ load_watershed_data <- function(input_file, number_of_dimensions, pvalue_fractio
 					   grouped_outlier_pvalues=grouped_outlier_pvalues, ungrouped_outlier_pvalues=ungrouped_outlier_pvalues, 
 					   grouped_outliers_binary=grouped_outliers_binary, ungrouped_outliers_binary=ungrouped_outliers_binary, 
 					   grouped_outliers_discrete=grouped_outliers_discrete, ungrouped_outliers_discrete=ungrouped_outliers_discrete,
-					   grouped_fraction_outliers_binary=grouped_fraction_outliers_binary, 
-					   groupings=groupings)
+					   groupings=groupings, grouped_groupings=grouped_groupings)
 
 	return(data_input)
 }
@@ -109,6 +118,9 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
 	##################################
 	# Extract dimensionality of space from the data
 	number_of_features <- ncol(feat_train)
+
+	cat("Number of features: ", number_of_features, "\n")
+	cat("dim of feat_train: ", dim(feat_train), "\n")
 
 	# Initialize logistic regression model parameters to zeros
 	gradient_variable_vec <- rep(0, number_of_features+1)
@@ -199,7 +211,7 @@ logistic_regression_genomic_annotation_model_cv <- function(feat_train, binary_o
 	theta_pair <- matrix(0, 1, get_number_of_edge_pairs(number_of_dimensions))
 	beta_init <- matrix(0,number_of_features+1, number_of_dimensions)
 	theta_singleton <- beta_init[1,]
-	theta <- as.matrix(beta_init[2:(number_of_features + 1),])
+	theta <- as.matrix(beta_init[2:(number_of_features+1),])
 	gam_parameters <- list(theta_pair=theta_pair, theta_singleton=theta_singleton, theta=theta)
 
 	# Run GAM in each dimension
@@ -560,6 +572,12 @@ check_convergence <- function(model_params, phi_old, theta_old, theta_singleton_
 ### Fit Watershed Model
 train_watershed_model <- function(feat, discrete_outliers, phi_init, theta_pair_init, theta_singleton_init, theta_init, pseudocounts, lambda, number_of_dimensions, model_name, vi_step_size, vi_thresh) {
 	# Put model parameters in an easy to handle data structure
+
+	cat("we are here 2\n")
+	cat("dim of feat:" , dim(feat), "\n")
+	cat("dim of discrete_outliers:" , dim(discrete_outliers), "\n")
+	cat("num dims to model: " , number_of_dimensions, "\n")
+
 	model_params <- initialize_model_params(dim(feat)[1], dim(feat)[2], number_of_dimensions, phi_init, theta_pair_init, theta_singleton_init, theta_init, pseudocounts, lambda, model_name, vi_step_size, vi_thresh)
 
 	##############################################
@@ -597,7 +615,7 @@ train_watershed_model <- function(feat, discrete_outliers, phi_init, theta_pair_
 		##########################
 		# E-Step: Infer P(Z | G, theta)
 		##########################
-		expected_conditional_probability <- update_conditional_z_given_g_probabilities(feat, discrete_outliers, model_params, posterior_bool=FALSE)
+		expected_conditional_probability <- update_marginal_posterior_probabilities(feat, discrete_outliers, model_params, posterior_bool=FALSE)
 		# Extract marginal posteriors and pairwise posteriors, respectively
 		model_params$mu <- expected_conditional_probability$probability
 		model_params$mu_pairwise <- expected_conditional_probability$probability_pairwise

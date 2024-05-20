@@ -44,6 +44,8 @@ NumericMatrix discretize_outliers_cpp(NumericMatrix outlier_pvalues) {
 	NumericMatrix outliers_discrete(outlier_pvalues.nrow(), outlier_pvalues.ncol());
 
 	for (int col = 0; col < outlier_pvalues.ncol(); col++) {
+		// This case handles columns that contain signed p-values, which are used
+		// to indicate over- vs. under-expression for e-outliers.
 		if (col_contains_negatives(outlier_pvalues, col)) {
 			for (int row = 0; row < outlier_pvalues.nrow(); row++) {
 				// Encode missingness due to raggedness as 0. I.e., since we have
@@ -70,6 +72,8 @@ NumericMatrix discretize_outliers_cpp(NumericMatrix outlier_pvalues) {
 					}
 				}
 			}
+		// This case handles columns that contain unsigned p-values, e.g. those 
+		// encoding ase-outliers and s-outliers.
 		} else {
 			for (int row = 0; row < outlier_pvalues.nrow(); row++) {
 				// ditto above comments to this code in the above `if` block
@@ -102,26 +106,3 @@ int printeroni_cpp(NumericMatrix outliers_discrete) {
 	return 0;
 }
 
-// TODO: delete this testing function
-// [[Rcpp::export]]
-int test_NAs(NumericMatrix arr) {
-	NumericMatrix tbp(2, 3);
-
-	for (int i = 0; i < 2; i++) {
-		for (int j = 0; j < 3; j++) {
-			tbp(i, j) = 2;
-		}
-	}
-
-	Rcpp::Rcout << tbp << std::endl;
-
-	for (int i = 0; i < 2; i++) {
-		for (int j = 0; j < 3; j++) {
-			tbp(i, j) = arr(i, j);
-		}
-	}
-
-	Rcpp::Rcout << tbp << std::endl;
-
-	return 1;
-}

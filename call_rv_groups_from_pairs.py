@@ -2,9 +2,9 @@ import pandas as pd
 
 def main():
     # Setup
-    data_dir = "example_data/"
-    annotation_file = data_dir + "watershed_example_data.txt"
-    output_file = data_dir + "watershed_example_data_grouped.txt"
+    data_dir = "/data/abattle4/david/data/annotations/"
+    annotation_file = data_dir + "final-EUR-rv.mergedannotation.plusN2pair.Pvalthresbased.tsv"
+    output_file = data_dir + "MAGE_EUR_grouped.tsv"
 
     get_rv_groups(annotation_file, output_file)
 
