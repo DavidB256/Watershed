@@ -1,4 +1,4 @@
-using Turing, StatsPlots, Random
+using Turing, StatsPlots, Random, FillArrays
 
 # @model function GAM(G, Z)
 #     Z
@@ -11,8 +11,11 @@ using Turing, StatsPlots, Random
     # Extract metadata
     K = size(E[1])
 
-    phi_inlier ~ Dirichlet(fill(prior_pseudocounts, K))
-    phi_outlier ~ Dirichlet(fill(prior_pseudocounts, K))
+    phi_inlier ~ Dirichlet(Fill(prior_pseudocounts, K))
+    phi_outlier ~ Dirichlet(Fill(prior_pseudocounts, K))
+
+    lambda = 0.1
+    alpha ~ MvNormal(0, 1 / lambda)
     # no prior for alpha (aka theta_singleton)
     # no prior for beta (aka theta)
     # no prior for omega (aka theta_pair)
@@ -22,6 +25,3 @@ end
 
 filldist(Exponential(), 2)
 
-
-
-sum(x, dims=1)
